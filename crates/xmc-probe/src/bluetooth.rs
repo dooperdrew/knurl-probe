@@ -5,7 +5,7 @@ use windows::Devices::Bluetooth::Rfcomm::{RfcommDeviceService, RfcommServiceId};
 use windows::Devices::Enumeration::DeviceInformation;
 use windows::core::{GUID, HSTRING};
 
-pub const MDR_V1: GUID = GUID::from_u128(0x96cc203e_5068_46ad_b32d_396ceebe3928);
+pub const MDR_V1: GUID = GUID::from_u128(0x96cc203e_5068_46ad_b32d_e316f5e069ba);
 pub const MDR_V2: GUID = GUID::from_u128(0x956c7b26_d49a_4ba8_b03f_b17d393cb6e2);
 
 pub fn uuid_of(kind: ServiceKind) -> GUID {
@@ -26,7 +26,7 @@ pub struct FoundService {
 /// the headphones to be switched on for the service to be reachable.
 pub fn find_services() -> windows::core::Result<Vec<FoundService>> {
     let mut found = Vec::new();
-    for kind in [ServiceKind::V2, ServiceKind::V1] {
+    for kind in [ServiceKind::V1, ServiceKind::V2] {
         let id = RfcommServiceId::FromUuid(uuid_of(kind))?;
         let selector = RfcommDeviceService::GetDeviceSelector(&id)?;
         let infos = DeviceInformation::FindAllAsyncAqsFilter(&selector)?.join()?;

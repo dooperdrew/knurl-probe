@@ -30,7 +30,7 @@ struct Cli {
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
 pub enum ServiceKind {
-    /// Sony MDR service, UUID 96cc203e-5068-46ad-b32d-396ceebe3928.
+    /// Sony MDR service, UUID 96cc203e-5068-46ad-b32d-e316f5e069ba (XM3/XM4 per public sources).
     V1,
     /// Sony MDR service, UUID 956c7b26-d49a-4ba8-b03f-b17d393cb6e2.
     V2,
@@ -51,7 +51,7 @@ enum Command {
         /// Part of the device name to connect to, e.g. "WH-1000XM4".
         #[arg(long)]
         device: String,
-        /// Which MDR service to open. Default: the first one found (v2 first).
+        /// Which MDR service to open. Default: the first one found (v1 first).
         #[arg(long, value_enum)]
         service: Option<ServiceKind>,
         /// Output file (JSON lines). Default: captures/raw/<time>-<device>.jsonl

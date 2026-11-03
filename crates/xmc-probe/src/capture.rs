@@ -184,7 +184,11 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
                                 frame.seq,
                                 hex(&frame.payload)
                             );
-                            if auto_ack && frame.data_type != DataType::Ack {
+                            if frame.data_type == DataType::Ack {
+                                // The next command must use the sequence number the device acknowledged with.
+                                sender.lock().unwrap_or_else(|p| p.into_inner()).next_seq =
+                                    frame.seq & 1;
+                            } else if auto_ack {
                                 let ack = ack_for(&frame);
                                 let ack_wire = ack.encode();
                                 let res = sender
@@ -235,7 +239,8 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
 
     for p in &opts.send_on_connect {
         send_payload(parse_hex(p)?)?;
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        // One request at a time: give the device time to reply and acknowledge.
+        std::thread::sleep(std::time::Duration::from_millis(800));
     }
 
     let stdin = std::io::stdin();

@@ -6,7 +6,10 @@
 //! payload layouts) live elsewhere and are added only once they are verified
 //! against captures from real WH-1000XM3 / WH-1000XM4 headphones.
 //!
-//! # Wire format (as assumed until the hardware spike confirms it)
+//! # Wire format
+//!
+//! Checked against published real WH-1000XM3 captures (see
+//! `tests/reference_vectors.rs`); still to be confirmed on our own XM3 and XM4.
 //!
 //! ```text
 //! 0x3E | data_type | seq | len (u32 big-endian) | payload[len] | checksum | 0x3C
