@@ -14,6 +14,11 @@ use crate::session::{Config, Event, Outcome, Session};
 /// Battery refresh period. A choice of ours, not a protocol requirement.
 pub const BATTERY_REFRESH_MS: u64 = 60_000;
 
+/// How many times a request that was acknowledged but never answered is sent
+/// again before it is reported as failed. On our XM3 (2026-11-07) the model
+/// name request once got an ACK and no reply; a second try is cheap.
+pub const NO_REPLY_RETRIES: u8 = 1;
+
 /// The read-only requests sent after connecting, in this order. It is the order
 /// of our XM3 guided capture, so the replay test exercises it end to end.
 pub const STARTUP: [Request; 7] = [
@@ -71,6 +76,10 @@ pub struct Client {
     state: DeviceState,
     started: bool,
     last_battery_request: Option<u64>,
+    /// The request on the wire and how many retries it has left.
+    in_flight: Option<(Request, u8)>,
+    /// Retries left for the request put back at the front of the queue.
+    retries_override: Option<u8>,
 }
 
 impl Client {
@@ -81,6 +90,8 @@ impl Client {
             state: DeviceState::default(),
             started: false,
             last_battery_request: None,
+            in_flight: None,
+            retries_override: None,
         }
     }
 
@@ -134,8 +145,14 @@ impl Client {
                 },
                 Event::Duplicate => {}
                 Event::RequestDone { opcode, outcome } => {
-                    if outcome != Outcome::Answered {
-                        out.push(ClientEvent::RequestFailed { opcode, outcome });
+                    let in_flight = self.in_flight.take();
+                    match (outcome, in_flight) {
+                        (Outcome::Answered, _) => {}
+                        (Outcome::NoReply, Some((request, left))) if left > 0 => {
+                            self.queue.push_front(request);
+                            self.retries_override = Some(left - 1);
+                        }
+                        _ => out.push(ClientEvent::RequestFailed { opcode, outcome }),
                     }
                 }
                 Event::Invalid(text) => out.push(ClientEvent::ProtocolError(text)),
@@ -156,6 +173,8 @@ impl Client {
             self.last_battery_request = Some(now);
         }
         if let Ok(wire) = self.session.send(request.payload(), now) {
+            let left = self.retries_override.take().unwrap_or(NO_REPLY_RETRIES);
+            self.in_flight = Some((request, left));
             out.push(ClientEvent::Send(wire));
         }
     }
@@ -221,6 +240,46 @@ mod tests {
             ])]
         );
         assert_eq!(c.state(), &DeviceState::default());
+    }
+
+    fn sent_payloads(out: &[ClientEvent]) -> Vec<Vec<u8>> {
+        out.iter()
+            .filter_map(|e| match e {
+                ClientEvent::Send(w) if w[1] == 0x0C => Some(w[7..w.len() - 2].to_vec()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn acked_but_unanswered_request_is_sent_once_more_then_reported() {
+        let cfg = Config {
+            ack_timeout_ms: 10,
+            max_attempts: 1,
+            reply_timeout_ms: 100,
+        };
+        let mut c = Client::new(cfg);
+        let first = c.start(0);
+        assert_eq!(sent_payloads(&first), vec![vec![0x00, 0x00]]);
+        // The headphones acknowledge (seq 1), but never reply.
+        let ack = [0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C];
+        assert!(c.receive(&ack, 1).is_empty());
+        let retry = c.poll(101);
+        assert!(
+            !retry
+                .iter()
+                .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
+        );
+        assert_eq!(sent_payloads(&retry), vec![vec![0x00, 0x00]]);
+        let ack0 = [0x3E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3C];
+        assert!(c.receive(&ack0, 102).is_empty());
+        let out = c.poll(202);
+        assert!(out.contains(&ClientEvent::RequestFailed {
+            opcode: 0x00,
+            outcome: Outcome::NoReply
+        }));
+        // Only then does the queue move on to the model name.
+        assert_eq!(sent_payloads(&out), vec![vec![0x04, 0x01]]);
     }
 
     #[test]
