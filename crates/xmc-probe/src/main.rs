@@ -52,6 +52,13 @@ enum Command {
         #[arg(long)]
         device: String,
     },
+    /// Run the same connection thread as the app and print what it reports
+    /// (read-only requests only).
+    Watch {
+        /// How long to watch, in seconds.
+        #[arg(long, default_value_t = 30)]
+        seconds: u64,
+    },
     /// List Windows audio endpoints (render and capture).
     Audio {
         /// Include disabled, unplugged and not-present endpoints.
@@ -105,6 +112,17 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::RfcommCheck { device } => rfcomm_check(&device),
+        Command::Watch { seconds } => {
+            let worker = xmc_device::Worker::spawn();
+            let start = std::time::Instant::now();
+            while start.elapsed() < std::time::Duration::from_secs(seconds) {
+                for event in worker.try_events() {
+                    println!("[{:>6} ms] {event:?}", start.elapsed().as_millis());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(())
+        }
         Command::Audio { all } => audio::print_endpoints(all),
         Command::Capture {
             device,
