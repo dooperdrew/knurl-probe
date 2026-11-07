@@ -28,7 +28,7 @@ struct Cli {
     command: Command,
 }
 
-#[derive(Clone, Copy, ValueEnum, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
 pub enum ServiceKind {
     /// Sony MDR service, UUID 96cc203e-5068-46ad-b32d-e316f5e069ba (XM3/XM4 per public sources).
     V1,
@@ -39,7 +39,12 @@ pub enum ServiceKind {
 #[derive(Subcommand)]
 enum Command {
     /// List paired devices that expose a Sony MDR RFCOMM service.
-    Devices,
+    Devices {
+        /// Also list every RFCOMM service each paired device reports in a live
+        /// SDP query (diagnostic, when no MDR service is found).
+        #[arg(long)]
+        all_services: bool,
+    },
     /// List Windows audio endpoints (render and capture).
     Audio {
         /// Include disabled, unplugged and not-present endpoints.
@@ -84,7 +89,14 @@ fn main() -> std::process::ExitCode {
 #[cfg(windows)]
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
-        Command::Devices => bluetooth::print_devices(),
+        Command::Devices { all_services } => {
+            bluetooth::print_devices()?;
+            if all_services {
+                println!();
+                bluetooth::print_all_rfcomm()?;
+            }
+            Ok(())
+        }
         Command::Audio { all } => audio::print_endpoints(all),
         Command::Capture {
             device,
