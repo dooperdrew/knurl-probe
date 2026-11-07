@@ -8,6 +8,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use xmc_protocol::client::{Client, ClientEvent, DeviceState};
+use xmc_protocol::message::Request;
 use xmc_protocol::session::{Config, Outcome};
 
 use crate::bluetooth::{self, MDR_V1, Paired};
@@ -45,11 +46,15 @@ pub enum DeviceEvent {
         name: String,
         reason: String,
     },
+    /// A command from the UI arrived while no headphones were connected and
+    /// was dropped (it is never kept for later).
+    CommandDropped,
 }
 
 /// Handle to the background thread. Dropping it stops the thread.
 pub struct Worker {
     events: Receiver<DeviceEvent>,
+    commands: Sender<Request>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -57,12 +62,13 @@ pub struct Worker {
 impl Worker {
     pub fn spawn() -> Worker {
         let (tx, events) = channel();
+        let (commands, commands_rx) = channel();
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
             let stop = stop.clone();
             std::thread::Builder::new()
                 .name("xmc-device".into())
-                .spawn(move || run(&tx, &stop))
+                .spawn(move || run(&tx, &commands_rx, &stop))
                 .ok()
         };
         if thread.is_none() {
@@ -73,15 +79,25 @@ impl Worker {
             ));
             return Worker {
                 events: rx,
+                commands,
                 stop,
                 thread: None,
             };
         }
         Worker {
             events,
+            commands,
             stop,
             thread,
         }
+    }
+
+    /// Sends a request (typically a setting change) to the headphones. The
+    /// result arrives as events: the confirming state, or a failure.
+    pub fn send(&self, request: Request) {
+        // The receiver lives as long as the thread; if the thread is gone
+        // there is nobody to report to, and the UI already shows the error.
+        let _ = self.commands.send(request);
     }
 
     /// Events received since the last call, without blocking.
@@ -111,8 +127,16 @@ fn wait(stop: &AtomicBool, d: Duration) -> bool {
     !stop.load(Ordering::Relaxed)
 }
 
-fn run(tx: &Sender<DeviceEvent>, stop: &AtomicBool) {
+/// Drops commands sent while disconnected, telling the UI.
+fn drop_commands(commands: &Receiver<Request>, tx: &Sender<DeviceEvent>) {
+    if commands.try_iter().count() > 0 {
+        let _ = tx.send(DeviceEvent::CommandDropped);
+    }
+}
+
+fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
+        drop_commands(commands, tx);
         let headphones = match bluetooth::paired_supported_headphones() {
             Ok(list) => list,
             Err(e) => {
@@ -130,7 +154,7 @@ fn run(tx: &Sender<DeviceEvent>, stop: &AtomicBool) {
             }
             continue;
         };
-        let reason = session(&target, tx, stop);
+        let reason = session(&target, tx, commands, stop);
         let _ = tx.send(DeviceEvent::Disconnected {
             name: target.name.clone(),
             reason,
@@ -147,7 +171,12 @@ enum Incoming {
 }
 
 /// One connection, from connect to disconnect. Returns why it ended.
-fn session(target: &Paired, tx: &Sender<DeviceEvent>, stop: &AtomicBool) -> String {
+fn session(
+    target: &Paired,
+    tx: &Sender<DeviceEvent>,
+    commands: &Receiver<Request>,
+    stop: &AtomicBool,
+) -> String {
     let _ = tx.send(DeviceEvent::Connecting {
         name: target.name.clone(),
     });
@@ -168,6 +197,8 @@ fn session(target: &Paired, tx: &Sender<DeviceEvent>, stop: &AtomicBool) -> Stri
     let origin = Instant::now();
     let now = || origin.elapsed().as_millis() as u64;
     let mut client = Client::new(Config::default());
+    // Anything the UI sent before this connection was opened is stale.
+    drop_commands(commands, tx);
     let mut reason = forward(client.start(now()), &socket, tx, &client).err();
 
     while reason.is_none() {
@@ -188,6 +219,9 @@ fn session(target: &Paired, tx: &Sender<DeviceEvent>, stop: &AtomicBool) -> Stri
             }
         };
         let mut all = events;
+        for request in commands.try_iter() {
+            all.extend(client.command(request, now()));
+        }
         all.extend(client.poll(now()));
         if let Err(e) = forward(all, &socket, tx, &client) {
             reason = Some(e);
