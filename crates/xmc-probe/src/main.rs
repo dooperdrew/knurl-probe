@@ -18,8 +18,6 @@ mod audio;
 mod bluetooth;
 #[cfg(windows)]
 mod capture;
-#[cfg(windows)]
-mod winsock;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -141,7 +139,7 @@ fn rfcomm_check(name: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("{device_name}");
         for kind in [ServiceKind::V1, ServiceKind::V2] {
             let label = format!("{kind:?}").to_lowercase();
-            match winsock::connect_rfcomm(address, bluetooth::uuid_of(kind)) {
+            match xmc_device::winsock::connect_rfcomm(address, bluetooth::uuid_of(kind)) {
                 Ok(_socket) => println!("  MDR {label}: connection opened (closed again)"),
                 Err(e) => println!("  MDR {label}: {e}"),
             }

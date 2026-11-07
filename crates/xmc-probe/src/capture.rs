@@ -8,13 +8,13 @@
 
 use crate::bluetooth;
 use crate::log::{CaptureLog, hex};
-use crate::winsock::{RfcommSocket, connect_rfcomm};
 use crate::{ServiceKind, parse_hex};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use xmc_device::winsock::{RfcommSocket, connect_rfcomm};
 use xmc_protocol::{DataType, Frame, FrameReader, ReadEvent, ack_for};
 
 pub struct Options {

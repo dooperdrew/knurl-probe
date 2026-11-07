@@ -149,3 +149,67 @@ fn replay_matches_the_wire_and_decodes_every_reply() {
     let duplicates = events.iter().filter(|e| **e == Event::Duplicate).count();
     assert_eq!(duplicates, 1 + 10, "one EQ repeat and ten NC repeats");
 }
+
+#[test]
+fn client_replay_builds_the_device_state() {
+    use xmc_protocol::client::{Battery, Client, ClientEvent, DeviceState, Equalizer};
+
+    let mut client = Client::new(Config::default());
+    let mut sent: Vec<Vec<u8>> = Vec::new();
+    let mut collect = |events: Vec<ClientEvent>| {
+        for ev in events {
+            match ev {
+                ClientEvent::Send(w) => sent.push(w),
+                ClientEvent::StateChanged => {}
+                other => panic!("unexpected client event {other:?}"),
+            }
+        }
+    };
+
+    // The client paces its own requests (next one as soon as the previous is
+    // answered); the capture answered them in the same order.
+    collect(client.start(0));
+    for line in lines().into_iter().filter(|l| !l.tx) {
+        collect(client.poll(line.t));
+        collect(client.receive(&line.wire, line.t));
+    }
+
+    let captured_tx: Vec<Vec<u8>> = lines()
+        .into_iter()
+        .filter(|l| l.tx)
+        .map(|l| l.wire)
+        .collect();
+    // 60 s after the start-up battery request (sent at 3205 ms) the client
+    // asks for the battery again, at the next poll (75996 ms). The capture
+    // tool did not; everything else is byte-identical.
+    let refresh = sent.remove(15);
+    assert_eq!(&refresh[7..9], &[0x10, 0x00], "periodic battery request");
+    assert_eq!(sent, captured_tx);
+
+    assert_eq!(
+        client.state(),
+        &DeviceState {
+            protocol_version: Some(0x4010),
+            model: Some("WH-1000XM3".into()),
+            firmware: Some("4.5.2".into()),
+            functions: Some(vec![
+                0x11, 0xC1, 0x12, 0x13, 0x14, 0x30, 0x71, 0x62, 0x81, 0x42, 0x41, 0x51, 0xA1, 0xE1,
+                0xE2, 0xD1, 0xD2, 0xF4, 0x39
+            ]),
+            battery: Some(Battery {
+                level: 100,
+                charging: Charging::No
+            }),
+            // The last NC/ASM message was the notification: ambient, level 20.
+            nc_asm: Some(NcAsmMode::Ambient {
+                level: 20,
+                focus_on_voice: false
+            }),
+            equalizer: Some(Equalizer {
+                preset: 0,
+                clear_bass: 0,
+                bands: [0; 5]
+            }),
+        }
+    );
+}

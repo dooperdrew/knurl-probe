@@ -1,13 +1,11 @@
 //! Discovery of Sony MDR RFCOMM services through WinRT.
 
 use crate::ServiceKind;
+use windows::Devices::Bluetooth::BluetoothCacheMode;
 use windows::Devices::Bluetooth::Rfcomm::{RfcommDeviceService, RfcommServiceId};
-use windows::Devices::Bluetooth::{BluetoothCacheMode, BluetoothDevice};
 use windows::Devices::Enumeration::DeviceInformation;
 use windows::core::{GUID, HSTRING};
-
-pub const MDR_V1: GUID = GUID::from_u128(0x96cc203e_5068_46ad_b32d_e316f5e069ba);
-pub const MDR_V2: GUID = GUID::from_u128(0x956c7b26_d49a_4ba8_b03f_b17d393cb6e2);
+pub use xmc_device::bluetooth::{MDR_V1, MDR_V2, format_address, paired_classic_devices};
 
 pub fn uuid_of(kind: ServiceKind) -> GUID {
     match kind {
@@ -82,20 +80,6 @@ fn push_unique(
     Ok(())
 }
 
-/// Paired classic (BR/EDR) Bluetooth devices. Devices Windows cannot open are
-/// skipped.
-pub fn paired_classic_devices() -> windows::core::Result<Vec<BluetoothDevice>> {
-    let selector = BluetoothDevice::GetDeviceSelectorFromPairingState(true)?;
-    let infos = DeviceInformation::FindAllAsyncAqsFilter(&selector)?.join()?;
-    let mut devices = Vec::new();
-    for info in infos {
-        if let Ok(device) = BluetoothDevice::FromIdAsync(&info.Id()?)?.join() {
-            devices.push(device);
-        }
-    }
-    Ok(devices)
-}
-
 /// Prints every RFCOMM service each paired classic device reports in a live
 /// SDP query. Diagnostic only.
 pub fn print_all_rfcomm() -> Result<(), Box<dyn std::error::Error>> {
@@ -131,14 +115,6 @@ pub fn print_all_rfcomm() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
-}
-
-pub fn format_address(addr: u64) -> String {
-    let b = addr.to_be_bytes();
-    format!(
-        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-        b[2], b[3], b[4], b[5], b[6], b[7]
-    )
 }
 
 pub fn print_devices() -> Result<(), Box<dyn std::error::Error>> {

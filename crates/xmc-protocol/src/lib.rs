@@ -22,6 +22,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod client;
 mod frame;
 pub mod message;
 mod reader;
