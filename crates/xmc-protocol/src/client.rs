@@ -135,13 +135,20 @@ impl Client {
         for event in events {
             match event {
                 Event::Send(wire) => out.push(ClientEvent::Send(wire)),
-                Event::Received { message, .. } => match message {
+                Event::Received {
+                    message, payload, ..
+                } => match message {
                     Ok(message) => {
                         if self.apply(message) {
                             out.push(ClientEvent::StateChanged);
                         }
                     }
-                    Err(e) => out.push(ClientEvent::ProtocolError(e.to_string())),
+                    // The bytes go with the error, so a report from a user is
+                    // enough to fix the decoder.
+                    Err(e) => out.push(ClientEvent::ProtocolError(format!(
+                        "{e} (payload {})",
+                        hex(&payload)
+                    ))),
                 },
                 Event::Duplicate => {}
                 Event::RequestDone { opcode, outcome } => {
@@ -208,6 +215,15 @@ impl Client {
         }
         *s != before
     }
+}
+
+/// "A9 01 20" style hex for messages.
+fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// True for a device name this app supports. Names as the headphones report
@@ -301,5 +317,17 @@ mod tests {
             out.iter()
                 .any(|e| matches!(e, ClientEvent::Send(w) if w[7..9] == [0x04, 0x01]))
         );
+    }
+
+    #[test]
+    fn protocol_errors_carry_the_payload_bytes() {
+        let mut c = Client::new(Config::default());
+        c.start(0);
+        // A battery reply that is one byte short, as a notification (seq 0).
+        let frame = crate::Frame::new(crate::DataType::DataMdr, 0, vec![0x11, 0x00, 0x64]);
+        let out = c.receive(&frame.encode(), 1);
+        assert!(out.contains(&ClientEvent::ProtocolError(
+            "opcode 0x11: expected 4 bytes, got 3 (payload 11 00 64)".into()
+        )));
     }
 }

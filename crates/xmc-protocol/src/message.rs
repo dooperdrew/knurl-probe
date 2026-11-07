@@ -144,8 +144,10 @@ pub enum Message {
         mode: NcAsmMode,
         notification: bool,
     },
-    /// Volume notification (0..=30), sent before an NC/ASM notification when
-    /// the NC button is pressed, per the sources. Unverified on our headphones.
+    /// Volume notification (0..=30): `A9 01 20 vv`, sent before an NC/ASM
+    /// notification when the NC button is pressed, per the sources.
+    /// Unverified on our headphones. Other `A9` layouts are not decoded: our
+    /// XM3 sent a 3-byte `A9` payload on 2026-11-07 (bytes not recorded).
     Volume(u8),
     /// A payload this module does not decode. Kept verbatim.
     Unknown(Vec<u8>),
@@ -316,10 +318,10 @@ impl Message {
                     notification: op == NTFY_NC_ASM,
                 })
             }
-            NTFY_PLAY => {
+            // 0xA9 carries several kinds of playback notification; only the
+            // volume layout is known. Anything else is kept, not rejected.
+            NTFY_PLAY if p.get(1..3) == Some(&[0x01, 0x20]) => {
                 need(p, 4)?;
-                expect(p, 1, 0x01)?;
-                expect(p, 2, 0x20)?;
                 Ok(Message::Volume(p[3]))
             }
             _ => Ok(Message::Unknown(p.to_vec())),
@@ -456,6 +458,22 @@ mod tests {
             Err(MessageError::Field { offset: 9, .. })
         ));
         assert_eq!(Message::decode(&[]), Err(MessageError::Empty));
+        assert!(matches!(
+            Message::decode(&[0xA9, 0x01, 0x20]),
+            Err(MessageError::Length { .. })
+        ));
+    }
+
+    #[test]
+    fn other_playback_notifications_are_kept_not_rejected() {
+        assert_eq!(
+            Message::decode(&[0xA9, 0x01, 0x20, 0x0F]),
+            Ok(Message::Volume(15))
+        );
+        // Our XM3 sent a 3-byte 0xA9 payload; its bytes were not recorded.
+        for p in [&[0xA9, 0x01, 0x00][..], &[0xA9, 0x03, 0x01], &[0xA9]] {
+            assert_eq!(Message::decode(p), Ok(Message::Unknown(p.to_vec())));
+        }
     }
 
     #[test]
