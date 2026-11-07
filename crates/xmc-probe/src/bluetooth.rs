@@ -84,7 +84,7 @@ fn push_unique(
 
 /// Paired classic (BR/EDR) Bluetooth devices. Devices Windows cannot open are
 /// skipped.
-fn paired_classic_devices() -> windows::core::Result<Vec<BluetoothDevice>> {
+pub fn paired_classic_devices() -> windows::core::Result<Vec<BluetoothDevice>> {
     let selector = BluetoothDevice::GetDeviceSelectorFromPairingState(true)?;
     let infos = DeviceInformation::FindAllAsyncAqsFilter(&selector)?.join()?;
     let mut devices = Vec::new();

@@ -6,16 +6,15 @@
 //! * `note <text>` write a marker into the log (e.g. "pressed NC button")
 //! * `quit`
 
-use crate::bluetooth::{self, FoundService};
+use crate::bluetooth;
 use crate::log::{CaptureLog, hex};
+use crate::winsock::{RfcommSocket, connect_rfcomm};
 use crate::{ServiceKind, parse_hex};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use windows::Networking::Sockets::{SocketProtectionLevel, StreamSocket};
-use windows::Storage::Streams::{DataReader, DataWriter, InputStreamOptions};
 use xmc_protocol::{DataType, Frame, FrameReader, ReadEvent, ack_for};
 
 pub struct Options {
@@ -29,18 +28,16 @@ pub struct Options {
 
 /// Writes frames to the socket and remembers the next outgoing sequence bit.
 struct Sender {
-    writer: DataWriter,
+    socket: Arc<RfcommSocket>,
     next_seq: u8,
 }
 
 impl Sender {
-    fn send_bytes(&mut self, bytes: &[u8]) -> windows::core::Result<()> {
-        self.writer.WriteBytes(bytes)?;
-        self.writer.StoreAsync()?.join()?;
-        Ok(())
+    fn send_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.socket.send_all(bytes)
     }
 
-    fn send_mdr(&mut self, payload: Vec<u8>) -> windows::core::Result<(Frame, Vec<u8>)> {
+    fn send_mdr(&mut self, payload: Vec<u8>) -> Result<(Frame, Vec<u8>), String> {
         let frame = Frame::new(DataType::DataMdr, self.next_seq, payload);
         let wire = frame.encode();
         self.send_bytes(&wire)?;
@@ -49,37 +46,47 @@ impl Sender {
     }
 }
 
-fn pick_service(opts: &Options) -> Result<FoundService, Box<dyn std::error::Error>> {
+/// The paired classic device whose name contains `opts.device`.
+fn pick_device(opts: &Options) -> Result<(String, u64), Box<dyn std::error::Error>> {
     let wanted = opts.device.to_lowercase();
-    let mut candidates: Vec<FoundService> = bluetooth::find_services()?
-        .into_iter()
-        .filter(|s| s.device_name.to_lowercase().contains(&wanted))
-        .filter(|s| {
-            opts.service.is_none_or(|k| {
-                matches!(
-                    (k, s.kind),
-                    (ServiceKind::V1, ServiceKind::V1) | (ServiceKind::V2, ServiceKind::V2)
-                )
-            })
-        })
-        .collect();
-    if candidates.is_empty() {
-        return Err(format!(
-            "no MDR service found on a paired device matching {:?}; run `xmc-probe devices`",
+    let mut matches = Vec::new();
+    for device in bluetooth::paired_classic_devices()? {
+        let name = device.Name()?.to_string_lossy();
+        if name.to_lowercase().contains(&wanted) {
+            matches.push((name, device.BluetoothAddress()?));
+        }
+    }
+    match matches.len() {
+        0 => Err(format!(
+            "no paired classic Bluetooth device matches {:?}; pair the headphones (not only the LE_ entry)",
             opts.device
         )
-        .into());
+        .into()),
+        1 => Ok(matches.remove(0)),
+        _ => {
+            let names: Vec<&str> = matches.iter().map(|(n, _)| n.as_str()).collect();
+            Err(format!("{:?} matches several devices: {names:?}; be more specific", opts.device).into())
+        }
     }
-    let names: Vec<String> = candidates.iter().map(|c| c.device_name.clone()).collect();
-    let first = names[0].clone();
-    if names.iter().any(|n| *n != first) {
-        return Err(format!(
-            "{:?} matches several devices: {names:?}; be more specific",
-            opts.device
-        )
-        .into());
+}
+
+/// Connects with Winsock to the requested MDR service, or to v1 then v2.
+fn open_mdr(
+    address: u64,
+    wanted: Option<ServiceKind>,
+) -> Result<(ServiceKind, RfcommSocket), Box<dyn std::error::Error>> {
+    let kinds: Vec<ServiceKind> = match wanted {
+        Some(k) => vec![k],
+        None => vec![ServiceKind::V1, ServiceKind::V2],
+    };
+    let mut errors = Vec::new();
+    for kind in kinds {
+        match connect_rfcomm(address, bluetooth::uuid_of(kind)) {
+            Ok(socket) => return Ok((kind, socket)),
+            Err(e) => errors.push(format!("{kind:?}: {e}")),
+        }
     }
-    Ok(candidates.remove(0))
+    Err(format!("could not open an MDR service ({})", errors.join("; ")).into())
 }
 
 fn default_out(device: &str) -> PathBuf {
@@ -113,55 +120,48 @@ const GUIDE: &[&str] = &[
 ];
 
 pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
-    let found = pick_service(&opts)?;
+    let (device_name, address) = pick_device(&opts)?;
     let out = opts
         .out
         .clone()
-        .unwrap_or_else(|| default_out(&found.device_name));
-    let log = Arc::new(Mutex::new(CaptureLog::create(&out)?));
+        .unwrap_or_else(|| default_out(&device_name));
 
     println!(
-        "Connecting to {} ({}) via MDR {:?}...",
-        found.device_name,
-        bluetooth::format_address(found.address),
-        found.kind
+        "Connecting to {device_name} ({})...",
+        bluetooth::format_address(address)
     );
-    let socket = StreamSocket::new()?;
-    socket
-        .ConnectWithProtectionLevelAsync(
-            &found.service.ConnectionHostName()?,
-            &found.service.ConnectionServiceName()?,
-            SocketProtectionLevel::BluetoothEncryptionAllowNullAuthentication,
-        )?
-        .join()?;
+    let (kind, socket) = open_mdr(address, opts.service)?;
+    let socket = Arc::new(socket);
+    let log = Arc::new(Mutex::new(CaptureLog::create(&out)?));
     lock(&log).event(&format!(
-        "connected device={} service={:?} auto_ack={}",
-        found.device_name, found.kind, opts.auto_ack
+        "connected device={device_name} service={kind:?} transport=winsock auto_ack={}",
+        opts.auto_ack
     ));
+    println!("Connected via MDR {kind:?}.");
     println!("Connected. Logging to {}", out.display());
 
     let sender = Arc::new(Mutex::new(Sender {
-        writer: DataWriter::CreateDataWriter(&socket.OutputStream()?)?,
+        socket: socket.clone(),
         next_seq: 0,
     }));
-    let reader = DataReader::CreateDataReader(&socket.InputStream()?)?;
-    reader.SetInputStreamOptions(InputStreamOptions::Partial)?;
     let stop = Arc::new(AtomicBool::new(false));
 
     let rx = {
-        let (log, sender, stop) = (log.clone(), sender.clone(), stop.clone());
+        let (log, sender, stop, socket) =
+            (log.clone(), sender.clone(), stop.clone(), socket.clone());
         let auto_ack = opts.auto_ack;
         std::thread::spawn(move || {
             let mut frames = FrameReader::new();
             let mut buf = vec![0u8; 1024];
             while !stop.load(Ordering::Relaxed) {
-                let n = match reader.LoadAsync(1024).and_then(|op| op.join()) {
+                let n = match socket.recv(&mut buf) {
+                    Ok(0) if stop.load(Ordering::Relaxed) => break,
                     Ok(0) => {
                         lock(&log).event("remote closed the connection");
                         println!("\n[headphones closed the connection]");
                         break;
                     }
-                    Ok(n) => n as usize,
+                    Ok(n) => n,
                     Err(e) => {
                         if !stop.load(Ordering::Relaxed) {
                             lock(&log).event(&format!("read error: {e}"));
@@ -170,10 +170,6 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 };
-                if let Err(e) = reader.ReadBytes(&mut buf[..n]) {
-                    lock(&log).event(&format!("read error: {e}"));
-                    break;
-                }
                 for ev in frames.push(&buf[..n]) {
                     match ev {
                         ReadEvent::Frame { frame, wire } => {
@@ -298,8 +294,8 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
 
     stop.store(true, Ordering::Relaxed);
     lock(&log).event("closing");
-    // Closing the socket unblocks the pending read in the receive thread.
-    socket.Close()?;
+    // Shutting the socket down unblocks the pending read in the receive thread.
+    socket.shutdown();
     let _ = rx.join();
     println!("Capture saved to {}", out.display());
     Ok(())

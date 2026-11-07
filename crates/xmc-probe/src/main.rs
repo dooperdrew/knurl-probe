@@ -18,6 +18,8 @@ mod audio;
 mod bluetooth;
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod winsock;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -44,6 +46,13 @@ enum Command {
         /// SDP query (diagnostic, when no MDR service is found).
         #[arg(long)]
         all_services: bool,
+    },
+    /// Try to open each MDR service with Winsock (AF_BTH) and close it again.
+    /// Sends no data to the headphones.
+    RfcommCheck {
+        /// Part of the paired device name, e.g. "WH-1000XM3".
+        #[arg(long)]
+        device: String,
     },
     /// List Windows audio endpoints (render and capture).
     Audio {
@@ -97,6 +106,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
+        Command::RfcommCheck { device } => rfcomm_check(&device),
         Command::Audio { all } => audio::print_endpoints(all),
         Command::Capture {
             device,
@@ -114,6 +124,33 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             guided,
         }),
     }
+}
+
+/// Reports, for each MDR service, whether a Winsock RFCOMM connection opens.
+#[cfg(windows)]
+fn rfcomm_check(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let needle = name.to_lowercase();
+    let mut matched = false;
+    for device in bluetooth::paired_classic_devices()? {
+        let device_name = device.Name()?.to_string_lossy();
+        if !device_name.to_lowercase().contains(&needle) {
+            continue;
+        }
+        matched = true;
+        let address = device.BluetoothAddress()?;
+        println!("{device_name}");
+        for kind in [ServiceKind::V1, ServiceKind::V2] {
+            let label = format!("{kind:?}").to_lowercase();
+            match winsock::connect_rfcomm(address, bluetooth::uuid_of(kind)) {
+                Ok(_socket) => println!("  MDR {label}: connection opened (closed again)"),
+                Err(e) => println!("  MDR {label}: {e}"),
+            }
+        }
+    }
+    if !matched {
+        return Err(format!("no paired classic device matches \"{name}\"").into());
+    }
+    Ok(())
 }
 
 #[cfg(not(windows))]
