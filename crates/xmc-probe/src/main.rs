@@ -166,7 +166,7 @@ pub fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
         .chars()
         .filter(|c| !matches!(c, ' ' | ',' | ':' | '-'))
         .collect();
-    if cleaned.len() % 2 != 0 {
+    if !cleaned.len().is_multiple_of(2) {
         return Err(format!("odd number of hex digits in {s:?}"));
     }
     (0..cleaned.len())

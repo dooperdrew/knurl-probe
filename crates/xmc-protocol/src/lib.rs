@@ -23,7 +23,9 @@
 #![forbid(unsafe_code)]
 
 mod frame;
+pub mod message;
 mod reader;
+pub mod session;
 
 pub use frame::{DataType, Frame, FrameError, ack_for};
 pub use reader::{FrameReader, ReadEvent};
