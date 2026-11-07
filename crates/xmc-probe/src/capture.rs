@@ -170,6 +170,9 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 };
+                // Chunk boundaries show whether frames arrived together (e.g.
+                // a burst of repeats after a stall) or one by one.
+                lock(&log).event(&format!("recv {n} bytes"));
                 for ev in frames.push(&buf[..n]) {
                     match ev {
                         ReadEvent::Frame { frame, wire } => {
