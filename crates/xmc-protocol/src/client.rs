@@ -5,6 +5,10 @@
 //! info, model, firmware, supported functions, battery, NC/ASM, EQ) one
 //! request at a time, then refreshes the battery every
 //! [`BATTERY_REFRESH_MS`]. Notifications update the state at any time.
+//!
+//! [`Client::command`] queues a setting change. The state is not changed by
+//! sending it: only the headphones' confirmation (a notification) changes it,
+//! so the app never shows a setting the headphones did not report.
 
 use std::collections::VecDeque;
 
@@ -53,6 +57,12 @@ pub struct DeviceState {
     pub functions: Option<Vec<u8>>,
     pub battery: Option<Battery>,
     pub nc_asm: Option<NcAsmMode>,
+    /// From the last NC/ASM message: true when the headphones use the
+    /// three-way NC / wind / ambient setting (byte 3 = `0x02`).
+    pub nc_three_way: Option<bool>,
+    /// From the last NC/ASM message: the ambient level byte, also reported
+    /// while ambient sound is not the active mode.
+    pub ambient_level: Option<u8>,
     pub equalizer: Option<Equalizer>,
 }
 
@@ -130,6 +140,20 @@ impl Client {
         self.handle(events, now)
     }
 
+    /// Queues a request, typically a setting change, and sends it as soon as
+    /// the channel is free. A queued, not yet sent change of the same kind is
+    /// replaced: dragging a slider sends only the latest value.
+    pub fn command(&mut self, request: Request, now: u64) -> Vec<ClientEvent> {
+        if request.is_setting() {
+            let kind = std::mem::discriminant(&request);
+            self.queue.retain(|r| std::mem::discriminant(r) != kind);
+        }
+        self.queue.push_back(request);
+        let mut out = Vec::new();
+        self.send_next(now, &mut out);
+        out
+    }
+
     fn handle(&mut self, events: Vec<Event>, now: u64) -> Vec<ClientEvent> {
         let mut out = Vec::new();
         for event in events {
@@ -138,6 +162,18 @@ impl Client {
                 Event::Received {
                     message, payload, ..
                 } => match message {
+                    Ok(message @ Message::NcAsm { .. }) => {
+                        // decode() checked the length; the raw bytes carry what
+                        // NcAsmMode does not: the setting group and the level.
+                        let s = &mut self.state;
+                        let before = (s.nc_three_way, s.ambient_level);
+                        s.nc_three_way = Some(payload[3] == 0x02);
+                        s.ambient_level = Some(payload[7]);
+                        let detail_changed = before != (s.nc_three_way, s.ambient_level);
+                        if self.apply(message) || detail_changed {
+                            out.push(ClientEvent::StateChanged);
+                        }
+                    }
                     Ok(message) => {
                         if self.apply(message) {
                             out.push(ClientEvent::StateChanged);
@@ -329,5 +365,61 @@ mod tests {
         assert!(out.contains(&ClientEvent::ProtocolError(
             "opcode 0x11: expected 4 bytes, got 3 (payload 11 00 64)".into()
         )));
+    }
+
+    fn idle_xm3_client() -> Client {
+        let mut c = Client::new(Config::default());
+        // Not started: nothing queued, the channel is free.
+        c.started = true;
+        c
+    }
+
+    #[test]
+    fn setting_change_is_sent_and_only_the_confirmation_changes_the_state() {
+        let mut c = idle_xm3_client();
+        let req = Request::SetNcAsm(crate::message::NcAsmSetting {
+            mode: NcAsmMode::NoiseCancelling,
+            wind_capable: true,
+            level_when_off: 20,
+        });
+        let out = c.command(req, 0);
+        assert_eq!(
+            sent_payloads(&out),
+            vec![vec![0x68, 0x02, 0x11, 0x02, 0x02, 0x01, 0x00, 0x00]]
+        );
+        assert_eq!(c.state().nc_asm, None);
+        // ACK (seq 1), then the confirming notification as the headphones
+        // would send it (seq 0).
+        let ack = [0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C];
+        c.receive(&ack, 1);
+        let ntfy = crate::Frame::new(
+            crate::DataType::DataMdr,
+            0,
+            vec![0x69, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00],
+        );
+        let out = c.receive(&ntfy.encode(), 2);
+        assert!(out.contains(&ClientEvent::StateChanged));
+        assert_eq!(c.state().nc_asm, Some(NcAsmMode::NoiseCancelling));
+        assert_eq!(c.state().nc_three_way, Some(true));
+        assert_eq!(c.state().ambient_level, Some(0));
+    }
+
+    #[test]
+    fn queued_changes_of_one_kind_collapse_to_the_latest() {
+        let mut c = idle_xm3_client();
+        let bands = |b| Request::SetEqBands {
+            clear_bass: 0,
+            bands: [b; 5],
+        };
+        // The first goes out at once; the next two wait, and the third
+        // replaces the second.
+        c.command(bands(1), 0);
+        assert!(c.command(bands(2), 1).is_empty());
+        assert!(c.command(Request::SetEqPreset(0x10), 2).is_empty());
+        assert!(c.command(bands(3), 3).is_empty());
+        assert_eq!(
+            c.queue.iter().copied().collect::<Vec<_>>(),
+            vec![Request::SetEqPreset(0x10), bands(3)]
+        );
     }
 }

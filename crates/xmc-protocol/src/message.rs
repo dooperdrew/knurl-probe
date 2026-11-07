@@ -1,7 +1,10 @@
 //! Meaning of MDR payloads (protocol V1, "table 1" = [`DataType::DataMdr`]).
 //!
-//! Only **read-only requests** are built here. Setter commands are added once
-//! they are verified on our own WH-1000XM3 and WH-1000XM4.
+//! Read requests plus two kinds of setting change: noise cancelling / ambient
+//! sound (`0x68`) and equalizer (`0x58`). The setter layouts come from
+//! Gadgetbridge (`SonyProtocolImplV1.java`) and are **not yet verified on our
+//! headphones**; the headphones confirm a change with the matching
+//! notification (`0x69`, `0x59`), which updates the state like any other.
 //!
 //! Decoders check every reply byte they rely on. Layouts come from the public
 //! sources in `docs/02-riferimenti-protocollo.md`. Each decoder has a test with
@@ -28,9 +31,11 @@ pub mod opcode {
     pub const NTFY_CODEC: u8 = 0x1B;
     pub const GET_EQ: u8 = 0x56;
     pub const RET_EQ: u8 = 0x57;
+    pub const SET_EQ: u8 = 0x58;
     pub const NTFY_EQ: u8 = 0x59;
     pub const GET_NC_ASM: u8 = 0x66;
     pub const RET_NC_ASM: u8 = 0x67;
+    pub const SET_NC_ASM: u8 = 0x68;
     pub const NTFY_NC_ASM: u8 = 0x69;
     pub const NTFY_PLAY: u8 = 0xA9;
 }
@@ -51,8 +56,8 @@ impl DeviceInfoKind {
     }
 }
 
-/// A read-only request. [`Request::payload`] gives the bytes to send in a
-/// `DATA_MDR` frame.
+/// A request to the headphones. [`Request::payload`] gives the bytes to send
+/// in a `DATA_MDR` frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Request {
     /// Must be the first request after connecting.
@@ -64,6 +69,83 @@ pub enum Request {
     Codec,
     Equalizer,
     NoiseCancelling,
+    /// Change noise cancelling / ambient sound. Unverified on our headphones.
+    SetNcAsm(NcAsmSetting),
+    /// Select an equalizer preset (see [`EQ_PRESETS`]). Unverified.
+    SetEqPreset(u8),
+    /// Set Clear Bass and the five bands, each -10..=10. Unverified.
+    SetEqBands {
+        clear_bass: i8,
+        bands: [i8; 5],
+    },
+}
+
+/// What [`Request::SetNcAsm`] sends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NcAsmSetting {
+    pub mode: NcAsmMode,
+    /// The headphones report the three-way "NC / wind / ambient" setting
+    /// (byte 3 = `0x02`, as our XM3 does) rather than NC on/off (`0x00`).
+    pub wind_capable: bool,
+    /// Ambient level sent with [`NcAsmMode::Off`], so turning everything off
+    /// keeps the last ambient level (Gadgetbridge does the same).
+    pub level_when_off: u8,
+}
+
+impl NcAsmSetting {
+    /// `68 02 <effect> <group> <mode> 01 <voice> <level>`, per Gadgetbridge.
+    fn payload(self) -> Vec<u8> {
+        let three_way = self.wind_capable;
+        let (effect, nc, voice, level) = match self.mode {
+            NcAsmMode::Off => (0x00, 0x00, false, self.level_when_off),
+            NcAsmMode::NoiseCancelling => (0x11, if three_way { 2 } else { 1 }, false, 0),
+            // Without the three-way setting there is no wind mode; Gadgetbridge
+            // then sends NC off, which is ambient.
+            NcAsmMode::WindReduction => (0x11, u8::from(three_way), false, 0),
+            NcAsmMode::Ambient {
+                level,
+                focus_on_voice,
+            } => (0x11, 0x00, focus_on_voice, level),
+        };
+        let group = if three_way { 0x02 } else { 0x00 };
+        vec![
+            opcode::SET_NC_ASM,
+            0x02,
+            effect,
+            group,
+            nc,
+            0x01,
+            u8::from(voice),
+            level.min(20),
+        ]
+    }
+}
+
+/// Equalizer presets with their codes, per Gadgetbridge (`EqualizerPreset`).
+/// Unverified on our headphones, except `0x00` (off) seen in our XM3 capture.
+pub const EQ_PRESETS: [(u8, &str); 12] = [
+    (0x00, "Off"),
+    (0x10, "Bright"),
+    (0x11, "Excited"),
+    (0x12, "Mellow"),
+    (0x13, "Relaxed"),
+    (0x14, "Vocal"),
+    (0x15, "Treble Boost"),
+    (0x16, "Bass Boost"),
+    (0x17, "Speech"),
+    (0xA0, "Manual"),
+    (0xA1, "Custom 1"),
+    (0xA2, "Custom 2"),
+];
+
+/// Name of an equalizer preset code, if known.
+pub fn eq_preset_name(code: u8) -> Option<&'static str> {
+    EQ_PRESETS.iter().find(|(c, _)| *c == code).map(|(_, n)| *n)
+}
+
+/// -10..=10 to the wire's 0..=20.
+fn offset10(v: i8) -> u8 {
+    (v.clamp(-10, 10) + 10) as u8
 }
 
 impl Request {
@@ -77,10 +159,29 @@ impl Request {
             Request::Codec => vec![GET_CODEC, 0x00],
             Request::Equalizer => vec![GET_EQ, 0x01],
             Request::NoiseCancelling => vec![GET_NC_ASM, 0x02],
+            Request::SetNcAsm(setting) => setting.payload(),
+            Request::SetEqPreset(code) => vec![SET_EQ, 0x01, code, 0x00],
+            Request::SetEqBands { clear_bass, bands } => {
+                // Gadgetbridge sends 0xFF in the preset slot for custom bands.
+                let mut p = vec![SET_EQ, 0x01, 0xFF, 0x06, offset10(clear_bass)];
+                p.extend(bands.iter().map(|&b| offset10(b)));
+                p
+            }
         }
     }
 
+    /// True for requests that change a setting. Only the latest change of a
+    /// kind is worth sending, so queued ones may be replaced.
+    pub fn is_setting(self) -> bool {
+        matches!(
+            self,
+            Request::SetNcAsm(_) | Request::SetEqPreset(_) | Request::SetEqBands { .. }
+        )
+    }
+
     /// Opcode of the reply that answers this request (request opcode + 1).
+    /// For a setting change this is the matching notification (`0x69`,
+    /// `0x59`), which is how the headphones confirm it.
     pub fn reply_opcode(self) -> u8 {
         self.payload()[0].wrapping_add(1)
     }
@@ -429,6 +530,65 @@ mod tests {
         );
         assert_eq!(Request::NoiseCancelling.payload(), vec![0x66, 0x02]);
         assert_eq!(Request::Equalizer.reply_opcode(), 0x57);
+    }
+
+    #[test]
+    fn nc_asm_set_payloads_match_gadgetbridge() {
+        let set = |mode, wind_capable| {
+            Request::SetNcAsm(NcAsmSetting {
+                mode,
+                wind_capable,
+                level_when_off: 20,
+            })
+            .payload()
+        };
+        // Our XM3 reports the three-way setting (byte 3 = 0x02).
+        assert_eq!(
+            set(NcAsmMode::NoiseCancelling, true),
+            [0x68, 0x02, 0x11, 0x02, 0x02, 0x01, 0x00, 0x00]
+        );
+        assert_eq!(
+            set(NcAsmMode::WindReduction, true),
+            [0x68, 0x02, 0x11, 0x02, 0x01, 0x01, 0x00, 0x00]
+        );
+        let ambient = |level, focus_on_voice| NcAsmMode::Ambient {
+            level,
+            focus_on_voice,
+        };
+        assert_eq!(
+            set(ambient(12, true), true),
+            [0x68, 0x02, 0x11, 0x02, 0x00, 0x01, 0x01, 0x0C]
+        );
+        assert_eq!(
+            set(NcAsmMode::Off, true),
+            [0x68, 0x02, 0x00, 0x02, 0x00, 0x01, 0x00, 0x14]
+        );
+        assert_eq!(
+            set(NcAsmMode::NoiseCancelling, false),
+            [0x68, 0x02, 0x11, 0x00, 0x01, 0x01, 0x00, 0x00]
+        );
+        assert_eq!(set(ambient(99, false), true)[7], 20);
+    }
+
+    #[test]
+    fn equalizer_set_payloads_match_gadgetbridge() {
+        assert_eq!(
+            Request::SetEqPreset(0x16).payload(),
+            [0x58, 0x01, 0x16, 0x00]
+        );
+        assert_eq!(
+            Request::SetEqBands {
+                clear_bass: 3,
+                bands: [-10, -1, 0, 1, 10]
+            }
+            .payload(),
+            [0x58, 0x01, 0xFF, 0x06, 13, 0, 9, 10, 11, 20]
+        );
+        assert_eq!(Request::SetEqPreset(0x00).reply_opcode(), 0x59);
+        assert!(Request::SetEqPreset(0x00).is_setting());
+        assert!(!Request::Equalizer.is_setting());
+        assert_eq!(eq_preset_name(0xA0), Some("Manual"));
+        assert_eq!(eq_preset_name(0x99), None);
     }
 
     #[test]

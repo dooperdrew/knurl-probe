@@ -205,6 +205,8 @@ fn client_replay_builds_the_device_state() {
                 level: 20,
                 focus_on_voice: false
             }),
+            nc_three_way: Some(true),
+            ambient_level: Some(20),
             equalizer: Some(Equalizer {
                 preset: 0,
                 clear_bass: 0,
