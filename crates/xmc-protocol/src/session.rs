@@ -9,9 +9,11 @@
 //! * every data frame from the headphones is acknowledged, duplicates included;
 //! * the next request uses the sequence number of the headphones' last ACK;
 //! * a request without ACK is sent again with the same sequence number;
-//! * the reply may arrive before the ACK (seen on our XM3);
-//! * a request may be answered by an alert (`0x99`) instead of its reply
-//!   (seen on our XM3 on 2026-11-08 for an equalizer change);
+//! * the reply may arrive before the ACK (seen on our XM3); the reply then
+//!   counts as the ACK, so a lost ACK never makes an applied request fail;
+//! * a request may be answered by an alert (`0x99 0x01`) instead of its reply
+//!   (seen on our XM3 on 2026-11-08 for an equalizer change); an alert we
+//!   cannot decode does not count as an answer;
 //! * some requests get only the ACK ([`Session::send_without_reply`]).
 //!
 //! The headphones repeat a frame (same sequence, same payload) when they did
@@ -19,7 +21,6 @@
 //! for an NC notification. Repeats are acknowledged again but reported only as
 //! [`Event::Duplicate`].
 
-use crate::message::opcode::ALERT_NTFY_PARAM;
 use crate::message::{Message, MessageError};
 use crate::{DataType, Frame, FrameReader, ReadEvent, ack_for};
 
@@ -228,15 +229,24 @@ impl Session {
         } else {
             Ok(Message::Unknown(frame.payload.clone()))
         };
+        // The reply, or a question of the headphones about the request (an
+        // alert we can decode: an unknown 0x99 says nothing about it).
         let reply = match &mut self.pending {
             Some(p)
                 if !p.replied
                     && frame.data_type == DataType::DataMdr
                     && p.reply_opcode.is_some()
                     && (frame.payload.first() == p.reply_opcode.as_ref()
-                        || frame.payload.first() == Some(&ALERT_NTFY_PARAM)) =>
+                        || matches!(message, Ok(Message::Alert { .. }))) =>
             {
                 p.replied = true;
+                // The reply proves the request arrived: if its ACK is lost or
+                // late, the request must not be resent or end as NoAck. The
+                // ACK would have carried the other sequence number.
+                if p.acked_at.is_none() {
+                    p.acked_at = Some(now);
+                    self.next_seq = 1 - p.seq;
+                }
                 true
             }
             _ => false,
@@ -295,7 +305,9 @@ mod tests {
     }
 
     #[test]
-    fn reply_before_ack_completes_after_ack() {
+    fn a_reply_before_the_ack_completes_the_request() {
+        // Seen on our XM3: the reply can come before the ACK. The reply proves
+        // the request arrived, so the request is done at once.
         let mut s = Session::new(Config::default());
         s.send(vec![0x00, 0x00], 0).expect("idle");
         let ev = s.receive(&bytes("3E 0C 00 00 00 00 04 01 00 40 10 61 3C"), 10);
@@ -304,16 +316,46 @@ mod tests {
             ev.iter()
                 .any(|e| matches!(e, Event::Received { reply: true, .. }))
         );
-        assert!(s.is_busy(), "still waiting for the ACK");
-        let ev = s.receive(&bytes("3E 01 01 00 00 00 00 02 3C"), 12);
         assert!(ev.contains(&Event::RequestDone {
             opcode: 0x00,
             outcome: Outcome::Answered
         }));
         assert!(!s.is_busy());
-        // Next request uses the sequence number from the device's ACK.
+        // The late ACK is stale and changes nothing.
+        let ev = s.receive(&bytes("3E 01 01 00 00 00 00 02 3C"), 12);
+        assert!(ev.is_empty(), "{ev:?}");
+        // Next request uses the sequence number the ACK would have carried.
         let wire = s.send(vec![0x04, 0x01], 20).expect("idle");
         assert_eq!(wire[2], 0x01);
+    }
+
+    #[test]
+    fn a_reply_whose_ack_is_lost_is_not_resent() {
+        let mut s = Session::new(Config::default());
+        s.send(vec![0x00, 0x00], 0).expect("idle");
+        s.receive(&bytes("3E 0C 00 00 00 00 04 01 00 40 10 61 3C"), 10);
+        // Long after the ACK timeout: nothing to resend, nothing failed.
+        assert!(s.poll(5_000).is_empty());
+    }
+
+    #[test]
+    fn an_alert_of_unknown_type_does_not_answer_the_request() {
+        let mut s = Session::new(Config::default());
+        s.send(vec![0x10, 0x00], 0).expect("idle");
+        s.receive(&bytes("3E 01 01 00 00 00 00 02 3C"), 1);
+        // 99 02 01: an alert kind we cannot decode, while the battery read waits.
+        let alert = Frame::new(DataType::DataMdr, 0, vec![0x99, 0x02, 0x01]).encode();
+        let ev = s.receive(&alert, 2);
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, Event::Received { reply: false, .. }))
+        );
+        assert!(s.is_busy(), "the read still waits for its reply");
+        let ev = s.poll(2 + Config::default().reply_timeout_ms);
+        assert!(ev.contains(&Event::RequestDone {
+            opcode: 0x10,
+            outcome: Outcome::NoReply
+        }));
     }
 
     #[test]

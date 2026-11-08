@@ -1,9 +1,11 @@
 //! Background thread: find the headphones, connect, run the client, and
 //! reconnect after a failure. The UI only reads [`DeviceEvent`]s.
 
+use std::cell::Cell;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -63,6 +65,8 @@ pub struct Worker {
     commands: Sender<Request>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Set once the UI was told that the thread is gone.
+    gone_reported: Cell<bool>,
 }
 
 impl Worker {
@@ -74,7 +78,9 @@ impl Worker {
             let stop = stop.clone();
             std::thread::Builder::new()
                 .name("xmc-device".into())
-                .spawn(move || run(&tx, &commands_rx, &stop))
+                .spawn(move || {
+                    supervise(&tx, &stop, RETRY_DELAY, || run(&tx, &commands_rx, &stop));
+                })
                 .ok()
         };
         if thread.is_none() {
@@ -88,6 +94,7 @@ impl Worker {
                 commands,
                 stop,
                 thread: None,
+                gone_reported: Cell::new(false),
             };
         }
         Worker {
@@ -95,28 +102,73 @@ impl Worker {
             commands,
             stop,
             thread,
+            gone_reported: Cell::new(false),
         }
     }
 
     /// Sends a request (typically a setting change) to the headphones. The
     /// result arrives as events: the confirming state, or a failure.
     pub fn send(&self, request: Request) {
-        // The receiver lives as long as the thread; if the thread is gone
-        // there is nobody to report to, and the UI already shows the error.
+        // The receiver lives as long as the thread. If the thread is gone the
+        // request is lost; try_events reports that the thread stopped.
         let _ = self.commands.send(request);
     }
 
-    /// Events received since the last call, without blocking.
+    /// Events received since the last call, without blocking. If the device
+    /// thread is gone (it only ends on stop, so this means it died), the UI
+    /// gets one error instead of silence: nothing would reach the headphones.
     pub fn try_events(&self) -> Vec<DeviceEvent> {
-        self.events.try_iter().collect()
+        let mut events = Vec::new();
+        loop {
+            match self.events.try_recv() {
+                Ok(event) => events.push(event),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    if !self.gone_reported.replace(true) {
+                        events.push(DeviceEvent::BluetoothError(
+                            "the device thread stopped; restart XMCompanion".into(),
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+        events
     }
 }
 
 impl Drop for Worker {
+    /// Asks the thread to stop without waiting for it: it can be inside a
+    /// blocking Bluetooth connect for 10-30 s, and waiting would keep the app
+    /// (and its single-instance lock) alive after Quit with no icon left.
+    /// Windows closes the socket when the process ends.
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        drop(self.thread.take());
+    }
+}
+
+/// Runs `body` until it returns (a stop was asked). A panic inside it is
+/// reported to the UI as an error, and `body` starts again after `delay`,
+/// so a bug in the protocol code costs a reconnect, not a frozen window.
+/// The panic itself is logged by the app's panic hook.
+fn supervise(tx: &Sender<DeviceEvent>, stop: &AtomicBool, delay: Duration, mut body: impl FnMut()) {
+    loop {
+        match catch_unwind(AssertUnwindSafe(&mut body)) {
+            Ok(()) => return,
+            Err(payload) => {
+                let detail = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown error".into());
+                let _ = tx.send(DeviceEvent::BluetoothError(format!(
+                    "internal error in the device thread ({detail}); restarting"
+                )));
+                if !wait(stop, delay) {
+                    return;
+                }
+            }
         }
     }
 }
@@ -287,4 +339,68 @@ fn forward(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_panic_is_reported_and_the_body_restarts() {
+        let (tx, rx) = channel();
+        let stop = AtomicBool::new(false);
+        let mut runs = 0;
+        // The panic message would go to stderr through the default hook.
+        supervise(&tx, &stop, Duration::ZERO, || {
+            runs += 1;
+            if runs == 1 {
+                panic!("decoder bug");
+            }
+        });
+        assert_eq!(runs, 2, "the body must run again after the panic");
+        let events: Vec<_> = rx.try_iter().collect();
+        assert_eq!(
+            events,
+            vec![DeviceEvent::BluetoothError(
+                "internal error in the device thread (decoder bug); restarting".into()
+            )]
+        );
+    }
+
+    #[test]
+    fn a_stop_during_the_restart_delay_ends_the_supervisor() {
+        let (tx, _rx) = channel();
+        let stop = AtomicBool::new(true);
+        let mut runs = 0;
+        supervise(&tx, &stop, Duration::from_secs(60), || {
+            runs += 1;
+            panic!("always");
+        });
+        assert_eq!(runs, 1);
+    }
+
+    #[test]
+    fn a_gone_thread_is_reported_once() {
+        let (tx, events) = channel();
+        let (commands, _commands_rx) = channel();
+        let worker = Worker {
+            events,
+            commands,
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: None,
+            gone_reported: Cell::new(false),
+        };
+        tx.send(DeviceEvent::NoHeadphones).expect("receiver alive");
+        drop(tx);
+        assert_eq!(
+            worker.try_events(),
+            vec![
+                DeviceEvent::NoHeadphones,
+                DeviceEvent::BluetoothError(
+                    "the device thread stopped; restart XMCompanion".into()
+                ),
+            ]
+        );
+        assert_eq!(worker.try_events(), vec![]);
+    }
 }

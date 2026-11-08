@@ -159,6 +159,11 @@ impl Client {
         // The headphones are waiting for an answer: it goes before the rest.
         if matches!(request, Request::AnswerAlert { .. }) {
             self.queue.push_front(request);
+            // The question came instead of the equalizer read-back (the alert
+            // answered it), so read the equalizer again after the answer.
+            if !self.queue.contains(&Request::Equalizer) {
+                self.queue.insert(1, Request::Equalizer);
+            }
         } else if request.is_eq_change() {
             // The headphones do not always confirm an equalizer change, so it
             // is read back; one read after the last change is enough.
@@ -248,10 +253,15 @@ impl Client {
         } else {
             self.session.send_without_reply(request.payload(), now)
         };
-        if let Ok(wire) = sent {
-            let left = self.retries_override.take().unwrap_or(NO_REPLY_RETRIES);
-            self.in_flight = Some((request, left));
-            out.push(ClientEvent::Send(wire));
+        match sent {
+            Ok(wire) => {
+                let left = self.retries_override.take().unwrap_or(NO_REPLY_RETRIES);
+                self.in_flight = Some((request, left));
+                out.push(ClientEvent::Send(wire));
+            }
+            // Not reachable while is_busy is checked above; if it ever is,
+            // the request waits instead of being lost.
+            Err(_) => self.queue.push_front(request),
         }
     }
 
@@ -473,6 +483,9 @@ mod tests {
             !out.iter()
                 .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
         );
+        // The alert took the place of the read-back, so the equalizer is read
+        // again after the answer.
+        assert_eq!(sent_payloads(&out), vec![vec![0x56, 0x01]]);
         let out = c.receive(
             &frame(
                 0,
