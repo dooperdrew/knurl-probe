@@ -74,7 +74,14 @@ impl Worker {
             let stop = stop.clone();
             std::thread::Builder::new()
                 .name("xmc-device".into())
-                .spawn(move || run(&tx, &commands_rx, &stop))
+                .spawn(move || {
+                    // Before any WinRT call: the Bluetooth lookup must not
+                    // depend on an apartment another thread may tear down.
+                    if let Err(e) = crate::keep_com_apartment() {
+                        let _ = tx.send(DeviceEvent::BluetoothError(e));
+                    }
+                    run(&tx, &commands_rx, &stop)
+                })
                 .ok()
         };
         if thread.is_none() {

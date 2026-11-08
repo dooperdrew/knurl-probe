@@ -18,6 +18,7 @@ features = [
     "Devices_Enumeration",
     "Win32_Devices_Bluetooth",
     "Win32_Networking_WinSock",
+    "Win32_System_Com",
 ]
 
 [lints]
