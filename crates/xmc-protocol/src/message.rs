@@ -204,9 +204,21 @@ impl Request {
         }
     }
 
-    /// False for requests the headphones only acknowledge.
+    /// False for requests the headphones only acknowledge. Equalizer changes
+    /// count as such: on our XM3 (2026-11-08) new bands sent while the preset
+    /// was already Manual were applied without any `0x59`, which comes only
+    /// when the preset changes. The client reads the equalizer back instead.
     pub fn expects_reply(self) -> bool {
-        !matches!(self, Request::AnswerAlert { .. })
+        !matches!(
+            self,
+            Request::AnswerAlert { .. } | Request::SetEqPreset(_) | Request::SetEqBands { .. }
+        )
+    }
+
+    /// True for the equalizer changes, which are followed by a read of the
+    /// equalizer ([`Request::Equalizer`]).
+    pub fn is_eq_change(self) -> bool {
+        matches!(self, Request::SetEqPreset(_) | Request::SetEqBands { .. })
     }
 
     /// True for requests that change a setting. Only the latest change of a
@@ -697,7 +709,10 @@ mod tests {
         );
         assert!(!yes.expects_reply());
         assert!(!yes.is_setting());
-        assert!(Request::SetEqPreset(0x16).expects_reply());
+        assert!(!Request::SetEqPreset(0x16).expects_reply());
+        assert!(Request::SetEqPreset(0x16).is_eq_change());
+        assert!(!Request::Equalizer.is_eq_change());
+        assert!(Request::Equalizer.expects_reply());
     }
 
     #[test]

@@ -159,6 +159,12 @@ impl Client {
         // The headphones are waiting for an answer: it goes before the rest.
         if matches!(request, Request::AnswerAlert { .. }) {
             self.queue.push_front(request);
+        } else if request.is_eq_change() {
+            // The headphones do not always confirm an equalizer change, so it
+            // is read back; one read after the last change is enough.
+            self.queue.retain(|r| *r != Request::Equalizer);
+            self.queue.push_back(request);
+            self.queue.push_back(Request::Equalizer);
         } else {
             self.queue.push_back(request);
         }
@@ -189,6 +195,12 @@ impl Client {
                     }
                     Ok(Message::Alert { message, asks }) => {
                         out.push(ClientEvent::Alert { message, asks });
+                    }
+                    // Reported even when unchanged: after an equalizer change
+                    // the window must drop the values it is still showing.
+                    Ok(message @ Message::Equalizer { .. }) => {
+                        self.apply(message);
+                        out.push(ClientEvent::StateChanged);
                     }
                     Ok(message) => {
                         if self.apply(message) {
@@ -436,7 +448,10 @@ mod tests {
             |seq, p: &[u8]| crate::Frame::new(crate::DataType::DataMdr, seq, p.to_vec()).encode();
         let out = c.command(Request::SetEqPreset(0x16), 0);
         assert_eq!(sent_payloads(&out), vec![vec![0x58, 0x01, 0x16, 0x00]]);
-        c.receive(&[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C], 1);
+        // The ACK completes the change; the read-back goes out.
+        let out = c.receive(&[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C], 1);
+        assert_eq!(sent_payloads(&out), vec![vec![0x56, 0x01]]);
+        // The alert arrives while the read waits; then the read's ACK.
         let out = c.receive(&frame(1, &[0x99, 0x01, 0x01, 0x01]), 2);
         assert!(out.contains(&ClientEvent::Alert {
             message: 0x01,
@@ -446,13 +461,14 @@ mod tests {
             !out.iter()
                 .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
         );
+        c.receive(&[0x3E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3C], 3);
         let answer = Request::AnswerAlert {
             message: 0x01,
             yes: false,
         };
         let out = c.command(answer, 4);
         assert_eq!(sent_payloads(&out), vec![vec![0x98, 0x01, 0x01, 0x00]]);
-        let out = c.receive(&[0x3E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3C], 5);
+        let out = c.receive(&[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C], 5);
         assert!(
             !out.iter()
                 .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
@@ -486,7 +502,56 @@ mod tests {
         assert!(c.command(bands(3), 3).is_empty());
         assert_eq!(
             c.queue.iter().copied().collect::<Vec<_>>(),
-            vec![Request::SetEqPreset(0x10), bands(3)]
+            vec![Request::SetEqPreset(0x10), bands(3), Request::Equalizer]
         );
+    }
+
+    /// Our XM3 on 2026-11-08: new bands while the preset was already Manual
+    /// got only an ACK, no `0x59`. The change completes on the ACK and the
+    /// read-back reports the values, even when nothing changed.
+    #[test]
+    fn equalizer_change_without_notification_is_read_back() {
+        let mut c = idle_xm3_client();
+        let frame =
+            |seq, p: &[u8]| crate::Frame::new(crate::DataType::DataMdr, seq, p.to_vec()).encode();
+        let req = Request::SetEqBands {
+            clear_bass: -5,
+            bands: [9, 4, -5, 8, -7],
+        };
+        let out = c.command(req, 0);
+        assert_eq!(
+            sent_payloads(&out),
+            vec![vec![
+                0x58, 0x01, 0xFF, 0x06, 0x05, 0x13, 0x0E, 0x05, 0x12, 0x03
+            ]]
+        );
+        let out = c.receive(&[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C], 1);
+        assert_eq!(sent_payloads(&out), vec![vec![0x56, 0x01]]);
+        // No notification, and still nothing failed long after the ACK.
+        let out = c.poll(20_000);
+        assert!(
+            !out.iter()
+                .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
+        );
+        let reply = [0x57, 0x01, 0xA0, 0x06, 0x05, 0x13, 0x0E, 0x05, 0x12, 0x03];
+        let out = c.receive(&frame(1, &reply), 20_001);
+        assert!(out.contains(&ClientEvent::StateChanged));
+        let eq = c.state().equalizer.expect("read back");
+        assert_eq!(
+            (eq.preset, eq.clear_bass, eq.bands),
+            (0xA0, -5, [9, 4, -5, 8, -7])
+        );
+        // The same values again still tell the window.
+        c.receive(
+            &[0x3E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3C],
+            20_002,
+        );
+        c.command(req, 20_003);
+        c.receive(
+            &[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C],
+            20_004,
+        );
+        let out = c.receive(&frame(0, &reply), 20_005);
+        assert!(out.contains(&ClientEvent::StateChanged));
     }
 }
