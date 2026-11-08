@@ -212,6 +212,8 @@ fn client_replay_builds_the_device_state() {
                 clear_bass: 0,
                 bands: [0; 5]
             }),
+            // The start-up sequence does not ask for the codec.
+            codec: None,
         }
     );
 }

@@ -2,9 +2,14 @@
 //!
 //! Read requests plus two kinds of setting change: noise cancelling / ambient
 //! sound (`0x68`) and equalizer (`0x58`). The setter layouts come from
-//! Gadgetbridge (`SonyProtocolImplV1.java`) and are **not yet verified on our
-//! headphones**; the headphones confirm a change with the matching
-//! notification (`0x69`, `0x59`), which updates the state like any other.
+//! Gadgetbridge (`SonyProtocolImplV1.java`); the headphones confirm a change
+//! with the matching notification (`0x69`, `0x59`), which updates the state
+//! like any other. On our XM3 (2026-11-08) both were checked: the noise modes
+//! through the app, the equalizer with `xmc-probe` captures.
+//!
+//! A change can also be answered by a question (`ALERT_NTFY_PARAM`, `0x99`):
+//! on our XM3 over aptX, an equalizer change asked to switch the connection
+//! mode, and was applied only after the switch to SBC. See [`Message::Alert`].
 //!
 //! Decoders check every reply byte they rely on. Layouts come from the public
 //! sources in `docs/02-riferimenti-protocollo.md`. Each decoder has a test with
@@ -37,8 +42,21 @@ pub mod opcode {
     pub const RET_NC_ASM: u8 = 0x67;
     pub const SET_NC_ASM: u8 = 0x68;
     pub const NTFY_NC_ASM: u8 = 0x69;
+    pub const ALERT_SET_PARAM: u8 = 0x98;
+    pub const ALERT_NTFY_PARAM: u8 = 0x99;
     pub const NTFY_PLAY: u8 = 0xA9;
 }
+
+/// Alert message type of [`Message::Alert`]: the change needs the connection
+/// mode to change ("DISCONNECT_CAUSED_BY_CONNECTION_MODE_CHANGE" in
+/// mos9527/SonyHeadphonesClient). Seen on our XM3 on 2026-11-08 after an
+/// equalizer change over aptX.
+pub const ALERT_CONNECTION_MODE_CHANGE: u8 = 0x01;
+
+/// Codec code for SBC in codec replies and notifications (`0x19`, `0x1B`),
+/// per Gadgetbridge (`AudioCodec`). Our XM3 reported it on 2026-11-08 after
+/// switching from aptX (`0x20`).
+pub const CODEC_SBC: u8 = 0x01;
 
 /// Which text field `GET_DEVICE_INFO` asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,14 +87,27 @@ pub enum Request {
     Codec,
     Equalizer,
     NoiseCancelling,
-    /// Change noise cancelling / ambient sound. Unverified on our headphones.
+    /// Change noise cancelling / ambient sound. Checked by the user on our XM3
+    /// (2026-11-08); unverified on the XM4.
     SetNcAsm(NcAsmSetting),
-    /// Select an equalizer preset (see [`EQ_PRESETS`]). Unverified.
+    /// Select an equalizer preset (see [`EQ_PRESETS`]). On our XM3
+    /// (2026-11-08): applied over SBC; over aptX answered with an alert.
     SetEqPreset(u8),
-    /// Set Clear Bass and the five bands, each -10..=10. Unverified.
+    /// Set Clear Bass and the five bands, each -10..=10. On our XM3
+    /// (2026-11-08, over SBC) applied and reported as preset Manual (`0xA0`).
     SetEqBands {
         clear_bass: i8,
         bands: [i8; 5],
+    },
+    /// Answer a yes/no [`Message::Alert`]: `98 01 <message> <00 no | 01 yes>`,
+    /// layout from mos9527/SonyHeadphonesClient (`SetAlertParamFixedMessageParam`).
+    /// The headphones only acknowledge it. On our XM3 (2026-11-08), for
+    /// [`ALERT_CONNECTION_MODE_CHANGE`]: "no" left the equalizer unchanged;
+    /// "yes" switched the codec from aptX to SBC, also without applying the
+    /// change, which then had to be sent again.
+    AnswerAlert {
+        message: u8,
+        yes: bool,
     },
 }
 
@@ -167,7 +198,15 @@ impl Request {
                 p.extend(bands.iter().map(|&b| offset10(b)));
                 p
             }
+            Request::AnswerAlert { message, yes } => {
+                vec![ALERT_SET_PARAM, 0x01, message, u8::from(yes)]
+            }
         }
+    }
+
+    /// False for requests the headphones only acknowledge.
+    pub fn expects_reply(self) -> bool {
+        !matches!(self, Request::AnswerAlert { .. })
     }
 
     /// True for requests that change a setting. Only the latest change of a
@@ -244,6 +283,16 @@ pub enum Message {
     NcAsm {
         mode: NcAsmMode,
         notification: bool,
+    },
+    /// The headphones ask something about the last change instead of
+    /// confirming it: `99 01 <message> <00 confirmation only | 01 yes/no>`,
+    /// layout from mos9527/SonyHeadphonesClient (`AlertMessageType`,
+    /// `AlertActionType`). Our XM3 sent `99 01 01 01` on 2026-11-08.
+    Alert {
+        /// Message type, e.g. [`ALERT_CONNECTION_MODE_CHANGE`].
+        message: u8,
+        /// True when a yes/no answer ([`Request::AnswerAlert`]) is expected.
+        asks: bool,
     },
     /// Volume notification (0..=30): `A9 01 20 vv`, sent before an NC/ASM
     /// notification when the NC button is pressed, per the sources.
@@ -419,6 +468,24 @@ impl Message {
                     notification: op == NTFY_NC_ASM,
                 })
             }
+            ALERT_NTFY_PARAM if p.get(1) == Some(&0x01) => {
+                need(p, 4)?;
+                let asks = match p[3] {
+                    0x00 => false,
+                    0x01 => true,
+                    value => {
+                        return Err(MessageError::Field {
+                            opcode: op,
+                            offset: 3,
+                            value,
+                        });
+                    }
+                };
+                Ok(Message::Alert {
+                    message: p[2],
+                    asks,
+                })
+            }
             // 0xA9 carries several kinds of playback notification; only the
             // volume layout is known. Anything else is kept, not rejected.
             NTFY_PLAY if p.get(1..3) == Some(&[0x01, 0x20]) => {
@@ -589,6 +656,78 @@ mod tests {
         assert!(!Request::Equalizer.is_setting());
         assert_eq!(eq_preset_name(0xA0), Some("Manual"));
         assert_eq!(eq_preset_name(0x99), None);
+    }
+
+    #[test]
+    fn alert_and_answer_match_our_xm3_capture() {
+        // 2026-11-08, XM3 over aptX, right after `58 01 16 00`.
+        assert_eq!(
+            Message::decode(&[0x99, 0x01, 0x01, 0x01]),
+            Ok(Message::Alert {
+                message: ALERT_CONNECTION_MODE_CHANGE,
+                asks: true
+            })
+        );
+        assert_eq!(
+            Message::decode(&[0x99, 0x01, 0x01, 0x00]),
+            Ok(Message::Alert {
+                message: 0x01,
+                asks: false
+            })
+        );
+        assert!(Message::decode(&[0x99, 0x01, 0x01, 0x07]).is_err());
+        assert!(Message::decode(&[0x99, 0x01, 0x01]).is_err());
+        // Other alert kinds (e.g. vibrator) are kept, not guessed.
+        assert_eq!(
+            Message::decode(&[0x99, 0x02, 0x01]),
+            Ok(Message::Unknown(vec![0x99, 0x02, 0x01]))
+        );
+        let yes = Request::AnswerAlert {
+            message: 0x01,
+            yes: true,
+        };
+        assert_eq!(yes.payload(), [0x98, 0x01, 0x01, 0x01]);
+        assert_eq!(
+            Request::AnswerAlert {
+                message: 0x01,
+                yes: false
+            }
+            .payload(),
+            [0x98, 0x01, 0x01, 0x00]
+        );
+        assert!(!yes.expects_reply());
+        assert!(!yes.is_setting());
+        assert!(Request::SetEqPreset(0x16).expects_reply());
+    }
+
+    #[test]
+    fn eq_replies_from_our_xm3_over_sbc() {
+        // 2026-11-08: Bass Boost, then custom bands reported as Manual.
+        assert_eq!(
+            Message::decode(&[0x59, 0x01, 0x16, 0x06, 0x11, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A]),
+            Ok(Message::Equalizer {
+                preset: 0x16,
+                clear_bass: 7,
+                bands: [0; 5],
+                notification: true
+            })
+        );
+        assert_eq!(
+            Message::decode(&[0x59, 0x01, 0xA0, 0x06, 0x0D, 0x0A, 0x09, 0x0A, 0x0B, 0x0C]),
+            Ok(Message::Equalizer {
+                preset: 0xA0,
+                clear_bass: 3,
+                bands: [0, -1, 0, 1, 2],
+                notification: true
+            })
+        );
+        assert_eq!(
+            Message::decode(&[0x1B, 0x00, 0x01]),
+            Ok(Message::Codec {
+                codec: CODEC_SBC,
+                notification: true
+            })
+        );
     }
 
     #[test]

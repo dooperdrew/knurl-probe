@@ -9,13 +9,17 @@
 //! * every data frame from the headphones is acknowledged, duplicates included;
 //! * the next request uses the sequence number of the headphones' last ACK;
 //! * a request without ACK is sent again with the same sequence number;
-//! * the reply may arrive before the ACK (seen on our XM3).
+//! * the reply may arrive before the ACK (seen on our XM3);
+//! * a request may be answered by an alert (`0x99`) instead of its reply
+//!   (seen on our XM3 on 2026-11-08 for an equalizer change);
+//! * some requests get only the ACK ([`Session::send_without_reply`]).
 //!
 //! The headphones repeat a frame (same sequence, same payload) when they did
 //! not get our ACK in time. Our XM3 did this once for an EQ reply and 11 times
 //! for an NC notification. Repeats are acknowledged again but reported only as
 //! [`Event::Duplicate`].
 
+use crate::message::opcode::ALERT_NTFY_PARAM;
 use crate::message::{Message, MessageError};
 use crate::{DataType, Frame, FrameReader, ReadEvent, ack_for};
 
@@ -41,7 +45,8 @@ impl Default for Config {
 /// How a request ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// Acknowledged and answered.
+    /// Acknowledged and answered (by its reply or an alert), or just
+    /// acknowledged for a request sent with [`Session::send_without_reply`].
     Answered,
     /// Acknowledged, but no reply arrived in time. Some requests never get a
     /// reply (setters, or GETs the model does not support).
@@ -78,7 +83,8 @@ pub struct Busy;
 #[derive(Debug)]
 struct Pending {
     opcode: u8,
-    reply_opcode: u8,
+    /// `None`: the ACK alone completes the request.
+    reply_opcode: Option<u8>,
     seq: u8,
     wire: Vec<u8>,
     sent_at: u64,
@@ -113,8 +119,24 @@ impl Session {
         self.pending.is_some()
     }
 
-    /// Starts a request and returns the bytes to write to the socket.
+    /// Starts a request and returns the bytes to write to the socket. It is
+    /// done when acknowledged and answered (opcode + 1, or an alert).
     pub fn send(&mut self, payload: Vec<u8>, now: u64) -> Result<Vec<u8>, Busy> {
+        let reply = payload.first().copied().unwrap_or(0).wrapping_add(1);
+        self.start(payload, Some(reply), now)
+    }
+
+    /// Starts a request the headphones only acknowledge.
+    pub fn send_without_reply(&mut self, payload: Vec<u8>, now: u64) -> Result<Vec<u8>, Busy> {
+        self.start(payload, None, now)
+    }
+
+    fn start(
+        &mut self,
+        payload: Vec<u8>,
+        reply_opcode: Option<u8>,
+        now: u64,
+    ) -> Result<Vec<u8>, Busy> {
         if self.pending.is_some() {
             return Err(Busy);
         }
@@ -123,7 +145,7 @@ impl Session {
         let wire = frame.encode();
         self.pending = Some(Pending {
             opcode,
-            reply_opcode: opcode.wrapping_add(1),
+            reply_opcode,
             seq: self.next_seq,
             wire: wire.clone(),
             sent_at: now,
@@ -210,7 +232,9 @@ impl Session {
             Some(p)
                 if !p.replied
                     && frame.data_type == DataType::DataMdr
-                    && frame.payload.first() == Some(&p.reply_opcode) =>
+                    && p.reply_opcode.is_some()
+                    && (frame.payload.first() == p.reply_opcode.as_ref()
+                        || frame.payload.first() == Some(&ALERT_NTFY_PARAM)) =>
             {
                 p.replied = true;
                 true
@@ -228,7 +252,7 @@ impl Session {
     fn finish_if_done(&mut self, now: u64, events: &mut Vec<Event>) {
         let Some(p) = &self.pending else { return };
         let Some(acked_at) = p.acked_at else { return };
-        let outcome = if p.replied {
+        let outcome = if p.replied || p.reply_opcode.is_none() {
             Outcome::Answered
         } else if now.saturating_sub(acked_at) >= self.config.reply_timeout_ms {
             Outcome::NoReply
@@ -327,6 +351,37 @@ mod tests {
                 outcome: Outcome::NoReply
             }]
         );
+    }
+
+    #[test]
+    fn alert_answers_the_request_in_flight() {
+        let mut s = Session::new(Config::default());
+        s.send(vec![0x58, 0x01, 0x16, 0x00], 0).expect("idle");
+        s.receive(&bytes("3E 01 01 00 00 00 00 02 3C"), 5);
+        let alert = Frame::new(DataType::DataMdr, 0, vec![0x99, 0x01, 0x01, 0x01]);
+        let ev = s.receive(&alert.encode(), 6);
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, Event::Received { reply: true, .. }))
+        );
+        assert!(ev.contains(&Event::RequestDone {
+            opcode: 0x58,
+            outcome: Outcome::Answered
+        }));
+        assert!(!s.is_busy());
+    }
+
+    #[test]
+    fn request_without_reply_is_done_when_acknowledged() {
+        let mut s = Session::new(Config::default());
+        s.send_without_reply(vec![0x98, 0x01, 0x01, 0x00], 0)
+            .expect("idle");
+        let ev = s.receive(&bytes("3E 01 01 00 00 00 00 02 3C"), 5);
+        assert!(ev.contains(&Event::RequestDone {
+            opcode: 0x98,
+            outcome: Outcome::Answered
+        }));
+        assert!(!s.is_busy());
     }
 
     #[test]

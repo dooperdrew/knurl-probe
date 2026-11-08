@@ -41,6 +41,12 @@ pub enum DeviceEvent {
     },
     /// The headphones sent something undecodable.
     ProtocolError(String),
+    /// The headphones ask about the last change. When `asks` is true they
+    /// wait for `Request::AnswerAlert`.
+    Alert {
+        message: u8,
+        asks: bool,
+    },
     /// The connection could not be opened or was lost.
     Disconnected {
         name: String,
@@ -274,6 +280,9 @@ fn forward(
             }
             ClientEvent::ProtocolError(e) => {
                 let _ = tx.send(DeviceEvent::ProtocolError(e));
+            }
+            ClientEvent::Alert { message, asks } => {
+                let _ = tx.send(DeviceEvent::Alert { message, asks });
             }
         }
     }

@@ -12,6 +12,8 @@
 
 use std::collections::VecDeque;
 
+#[cfg(doc)]
+use crate::message::CODEC_SBC;
 use crate::message::{Charging, DeviceInfoKind, Message, NcAsmMode, Request};
 use crate::session::{Config, Event, Outcome, Session};
 
@@ -64,6 +66,9 @@ pub struct DeviceState {
     /// while ambient sound is not the active mode.
     pub ambient_level: Option<u8>,
     pub equalizer: Option<Equalizer>,
+    /// Audio codec code from the last codec message (see [`CODEC_SBC`]).
+    /// Not asked at start-up: the headphones notify it when it changes.
+    pub codec: Option<u8>,
 }
 
 /// Output of the client.
@@ -77,6 +82,9 @@ pub enum ClientEvent {
     RequestFailed { opcode: u8, outcome: Outcome },
     /// The headphones sent something that could not be decoded.
     ProtocolError(String),
+    /// The headphones ask about the last change (see [`Message::Alert`]).
+    /// When `asks` is true they wait for [`Request::AnswerAlert`].
+    Alert { message: u8, asks: bool },
 }
 
 #[derive(Debug)]
@@ -148,7 +156,12 @@ impl Client {
             let kind = std::mem::discriminant(&request);
             self.queue.retain(|r| std::mem::discriminant(r) != kind);
         }
-        self.queue.push_back(request);
+        // The headphones are waiting for an answer: it goes before the rest.
+        if matches!(request, Request::AnswerAlert { .. }) {
+            self.queue.push_front(request);
+        } else {
+            self.queue.push_back(request);
+        }
         let mut out = Vec::new();
         self.send_next(now, &mut out);
         out
@@ -173,6 +186,9 @@ impl Client {
                         if self.apply(message) || detail_changed {
                             out.push(ClientEvent::StateChanged);
                         }
+                    }
+                    Ok(Message::Alert { message, asks }) => {
+                        out.push(ClientEvent::Alert { message, asks });
                     }
                     Ok(message) => {
                         if self.apply(message) {
@@ -215,7 +231,12 @@ impl Client {
         if request == Request::Battery {
             self.last_battery_request = Some(now);
         }
-        if let Ok(wire) = self.session.send(request.payload(), now) {
+        let sent = if request.expects_reply() {
+            self.session.send(request.payload(), now)
+        } else {
+            self.session.send_without_reply(request.payload(), now)
+        };
+        if let Ok(wire) = sent {
             let left = self.retries_override.take().unwrap_or(NO_REPLY_RETRIES);
             self.in_flight = Some((request, left));
             out.push(ClientEvent::Send(wire));
@@ -247,7 +268,8 @@ impl Client {
                     bands,
                 })
             }
-            Message::Codec { .. } | Message::Volume(_) | Message::Unknown(_) => {}
+            Message::Codec { codec, .. } => s.codec = Some(codec),
+            Message::Alert { .. } | Message::Volume(_) | Message::Unknown(_) => {}
         }
         *s != before
     }
@@ -402,6 +424,51 @@ mod tests {
         assert_eq!(c.state().nc_asm, Some(NcAsmMode::NoiseCancelling));
         assert_eq!(c.state().nc_three_way, Some(true));
         assert_eq!(c.state().ambient_level, Some(0));
+    }
+
+    /// The exchange captured on our XM3 on 2026-11-08 (over aptX): an
+    /// equalizer change is answered by an alert, the app answers "no", and the
+    /// headphones confirm the unchanged equalizer.
+    #[test]
+    fn equalizer_change_answered_by_an_alert() {
+        let mut c = idle_xm3_client();
+        let frame =
+            |seq, p: &[u8]| crate::Frame::new(crate::DataType::DataMdr, seq, p.to_vec()).encode();
+        let out = c.command(Request::SetEqPreset(0x16), 0);
+        assert_eq!(sent_payloads(&out), vec![vec![0x58, 0x01, 0x16, 0x00]]);
+        c.receive(&[0x3E, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x3C], 1);
+        let out = c.receive(&frame(1, &[0x99, 0x01, 0x01, 0x01]), 2);
+        assert!(out.contains(&ClientEvent::Alert {
+            message: 0x01,
+            asks: true
+        }));
+        assert!(
+            !out.iter()
+                .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
+        );
+        let answer = Request::AnswerAlert {
+            message: 0x01,
+            yes: false,
+        };
+        let out = c.command(answer, 4);
+        assert_eq!(sent_payloads(&out), vec![vec![0x98, 0x01, 0x01, 0x00]]);
+        let out = c.receive(&[0x3E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3C], 5);
+        assert!(
+            !out.iter()
+                .any(|e| matches!(e, ClientEvent::RequestFailed { .. }))
+        );
+        let out = c.receive(
+            &frame(
+                0,
+                &[0x59, 0x01, 0x00, 0x06, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A],
+            ),
+            6,
+        );
+        assert!(out.contains(&ClientEvent::StateChanged));
+        assert_eq!(c.state().equalizer.map(|e| e.preset), Some(0x00));
+        // The codec notification after a "yes" is kept in the state.
+        c.receive(&frame(1, &[0x1B, 0x00, 0x01]), 7);
+        assert_eq!(c.state().codec, Some(0x01));
     }
 
     #[test]
