@@ -28,6 +28,17 @@ pub enum DeviceEvent {
     NoHeadphones,
     /// Windows refused or failed the Bluetooth lookup.
     BluetoothError(String),
+    /// A problem of this PC's setup found when the device thread started. It
+    /// stays true for the app's whole run, so the UI keeps showing it.
+    SetupError(String),
+    /// A failure inside Knurl itself, not of Bluetooth or the headphones:
+    /// the device thread panicked (`recovers`: it starts again by itself),
+    /// or it is gone or could not start (`recovers` false: nothing reaches
+    /// the headphones until the app is started again).
+    Internal {
+        error: String,
+        recovers: bool,
+    },
     Connecting {
         name: String,
     },
@@ -82,7 +93,7 @@ impl Worker {
                     // Before any WinRT call: the Bluetooth lookup must not
                     // depend on an apartment another thread may tear down.
                     if let Err(e) = crate::keep_com_apartment() {
-                        let _ = tx.send(DeviceEvent::BluetoothError(e));
+                        let _ = tx.send(DeviceEvent::SetupError(e));
                     }
                     supervise(&tx, &stop, RETRY_DELAY, || run(&tx, &commands_rx, &stop));
                 })
@@ -91,9 +102,10 @@ impl Worker {
         if thread.is_none() {
             // Without a thread nothing would ever report; say so.
             let (tx, rx) = channel();
-            let _ = tx.send(DeviceEvent::BluetoothError(
-                "could not start the device thread".into(),
-            ));
+            let _ = tx.send(DeviceEvent::Internal {
+                error: "the device thread could not start".into(),
+                recovers: false,
+            });
             return Worker {
                 events: rx,
                 commands,
@@ -130,9 +142,10 @@ impl Worker {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     if !self.gone_reported.replace(true) {
-                        events.push(DeviceEvent::BluetoothError(
-                            "the device thread stopped; restart XMCompanion".into(),
-                        ));
+                        events.push(DeviceEvent::Internal {
+                            error: "the device thread stopped".into(),
+                            recovers: false,
+                        });
                     }
                     break;
                 }
@@ -167,9 +180,10 @@ fn supervise(tx: &Sender<DeviceEvent>, stop: &AtomicBool, delay: Duration, mut b
                     .map(|s| (*s).to_string())
                     .or_else(|| payload.downcast_ref::<String>().cloned())
                     .unwrap_or_else(|| "unknown error".into());
-                let _ = tx.send(DeviceEvent::BluetoothError(format!(
-                    "internal error in the device thread ({detail}); restarting"
-                )));
+                let _ = tx.send(DeviceEvent::Internal {
+                    error: format!("internal error in the device thread ({detail})"),
+                    recovers: true,
+                });
                 if !wait(stop, delay) {
                     return;
                 }
@@ -228,6 +242,29 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
     }
 }
 
+/// Something that can be shut down to unblock a reader on another thread.
+trait Shutdown {
+    fn shutdown(&self);
+}
+
+impl Shutdown for RfcommSocket {
+    fn shutdown(&self) {
+        RfcommSocket::shutdown(self);
+    }
+}
+
+/// Shuts the socket down when dropped, also when a panic unwinds the
+/// session: the reader thread holds its own reference and blocks in `recv`,
+/// so without the shutdown the socket (and the headphones' MDR channel)
+/// would stay open until the app ends.
+struct ShutdownOnDrop<S: Shutdown>(Arc<S>);
+
+impl<S: Shutdown> Drop for ShutdownOnDrop<S> {
+    fn drop(&mut self) {
+        self.0.shutdown();
+    }
+}
+
 enum Incoming {
     Bytes(Vec<u8>),
     Closed(String),
@@ -244,7 +281,7 @@ fn session(
         name: target.name.clone(),
     });
     let socket = match connect_rfcomm(target.address, MDR_V1) {
-        Ok(s) => Arc::new(s),
+        Ok(s) => ShutdownOnDrop(Arc::new(s)),
         Err(e) => return e,
     };
     let _ = tx.send(DeviceEvent::Connected {
@@ -253,7 +290,7 @@ fn session(
 
     let (bytes_tx, bytes_rx) = channel();
     let reader = {
-        let socket = socket.clone();
+        let socket = socket.0.clone();
         std::thread::spawn(move || read_loop(&socket, &bytes_tx))
     };
 
@@ -262,7 +299,7 @@ fn session(
     let mut client = Client::new(Config::default());
     // Anything the UI sent before this connection was opened is stale.
     drop_commands(commands, tx);
-    let mut reason = forward(client.start(now()), &socket, tx, &client).err();
+    let mut reason = forward(client.start(now()), &socket.0, tx, &client).err();
 
     while reason.is_none() {
         if stop.load(Ordering::Relaxed) {
@@ -286,12 +323,13 @@ fn session(
             all.extend(client.command(request, now()));
         }
         all.extend(client.poll(now()));
-        if let Err(e) = forward(all, &socket, tx, &client) {
+        if let Err(e) = forward(all, &socket.0, tx, &client) {
             reason = Some(e);
         }
     }
 
-    socket.shutdown();
+    // Shuts the socket down, which ends the reader's `recv`.
+    drop(socket);
     let _ = reader.join();
     reason.unwrap_or_default()
 }
@@ -366,9 +404,10 @@ mod tests {
         let events: Vec<_> = rx.try_iter().collect();
         assert_eq!(
             events,
-            vec![DeviceEvent::BluetoothError(
-                "internal error in the device thread (decoder bug); restarting".into()
-            )]
+            vec![DeviceEvent::Internal {
+                error: "internal error in the device thread (decoder bug)".into(),
+                recovers: true,
+            }]
         );
     }
 
@@ -401,11 +440,45 @@ mod tests {
             worker.try_events(),
             vec![
                 DeviceEvent::NoHeadphones,
-                DeviceEvent::BluetoothError(
-                    "the device thread stopped; restart XMCompanion".into()
-                ),
+                DeviceEvent::Internal {
+                    error: "the device thread stopped".into(),
+                    recovers: false,
+                },
             ]
         );
         assert_eq!(worker.try_events(), vec![]);
+    }
+
+    #[derive(Default)]
+    struct FakeSocket {
+        shut: AtomicBool,
+    }
+
+    impl Shutdown for FakeSocket {
+        fn shutdown(&self) {
+            self.shut.store(true, Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn a_panicking_session_still_shuts_the_socket_down() {
+        let socket = Arc::new(FakeSocket::default());
+        let reader_copy = socket.clone();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = ShutdownOnDrop(socket);
+            panic!("decoder bug");
+        }));
+        assert!(result.is_err());
+        assert!(
+            reader_copy.shut.load(Ordering::Relaxed),
+            "the socket must be shut down while unwinding"
+        );
+    }
+
+    #[test]
+    fn a_normal_end_shuts_the_socket_down() {
+        let socket = Arc::new(FakeSocket::default());
+        drop(ShutdownOnDrop(socket.clone()));
+        assert!(socket.shut.load(Ordering::Relaxed));
     }
 }
