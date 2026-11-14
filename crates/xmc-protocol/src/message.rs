@@ -341,7 +341,7 @@ fn need(p: &[u8], expected: usize) -> Result<(), MessageError> {
         Ok(())
     } else {
         Err(MessageError::Length {
-            opcode: p[0],
+            opcode: p.first().copied().unwrap_or(0),
             expected,
             actual: p.len(),
         })
@@ -349,23 +349,35 @@ fn need(p: &[u8], expected: usize) -> Result<(), MessageError> {
 }
 
 fn expect(p: &[u8], offset: usize, value: u8) -> Result<(), MessageError> {
-    if p[offset] == value {
-        Ok(())
-    } else {
-        Err(MessageError::Field {
-            opcode: p[0],
+    let opcode = p.first().copied().unwrap_or(0);
+    match p.get(offset) {
+        Some(&actual) if actual == value => Ok(()),
+        Some(&actual) => Err(MessageError::Field {
+            opcode,
             offset,
-            value: p[offset],
-        })
+            value: actual,
+        }),
+        None => Err(MessageError::Length {
+            opcode,
+            expected: offset + 1,
+            actual: p.len(),
+        }),
     }
 }
 
 /// A value stored with a +10 offset (0..=20 on the wire, -10..=10 in reality).
 fn centred(p: &[u8], offset: usize) -> Result<i8, MessageError> {
-    let v = p[offset];
+    let opcode = p.first().copied().unwrap_or(0);
+    let Some(&v) = p.get(offset) else {
+        return Err(MessageError::Length {
+            opcode,
+            expected: offset + 1,
+            actual: p.len(),
+        });
+    };
     if v > 20 {
         return Err(MessageError::Field {
-            opcode: p[0],
+            opcode,
             offset,
             value: v,
         });
@@ -512,7 +524,15 @@ impl Message {
 /// Bytes 2..8 of an NC/ASM payload: effect, NC setting type, NC value,
 /// ambient setting type, ambient id (voice focus), ambient level.
 fn decode_nc_asm(p: &[u8]) -> Result<NcAsmMode, MessageError> {
+    if p.len() < 8 {
+        return Err(MessageError::Length {
+            opcode: p.first().copied().unwrap_or(0),
+            expected: 8,
+            actual: p.len(),
+        });
+    }
     let level = p[7];
+
     if level > 20 {
         return Err(MessageError::Field {
             opcode: p[0],
@@ -831,5 +851,91 @@ mod tests {
             assert!(function_name(code).is_some(), "0x{code:02X}");
         }
         assert_eq!(function_name(0x00), None);
+    }
+
+    #[test]
+    fn helper_functions_are_panic_safe() {
+        // need on empty slice
+        assert_eq!(
+            need(&[], 2),
+            Err(MessageError::Length {
+                opcode: 0,
+                expected: 2,
+                actual: 0
+            })
+        );
+        // expect on empty or out-of-bounds slice
+        assert_eq!(
+            expect(&[], 0, 0x01),
+            Err(MessageError::Length {
+                opcode: 0,
+                expected: 1,
+                actual: 0
+            })
+        );
+        assert_eq!(
+            expect(&[0x05], 3, 0x01),
+            Err(MessageError::Length {
+                opcode: 0x05,
+                expected: 4,
+                actual: 1
+            })
+        );
+        assert_eq!(
+            expect(&[0x05, 0x02], 1, 0x01),
+            Err(MessageError::Field {
+                opcode: 0x05,
+                offset: 1,
+                value: 0x02
+            })
+        );
+        // centred on empty or out-of-bounds slice
+        assert_eq!(
+            centred(&[], 0),
+            Err(MessageError::Length {
+                opcode: 0,
+                expected: 1,
+                actual: 0
+            })
+        );
+        assert_eq!(
+            centred(&[0x57], 4),
+            Err(MessageError::Length {
+                opcode: 0x57,
+                expected: 5,
+                actual: 1
+            })
+        );
+        assert_eq!(centred(&[0x57, 10], 1), Ok(0));
+        assert_eq!(centred(&[0x57, 0], 1), Ok(-10));
+        assert_eq!(centred(&[0x57, 20], 1), Ok(10));
+        assert_eq!(
+            centred(&[0x57, 21], 1),
+            Err(MessageError::Field {
+                opcode: 0x57,
+                offset: 1,
+                value: 21
+            })
+        );
+    }
+
+    #[test]
+    fn decode_nc_asm_is_panic_safe_with_short_slice() {
+        assert_eq!(
+            decode_nc_asm(&[]),
+            Err(MessageError::Length {
+                opcode: 0,
+                expected: 8,
+                actual: 0
+            })
+        );
+        assert_eq!(
+            decode_nc_asm(&[0x67, 0x02]),
+            Err(MessageError::Length {
+                opcode: 0x67,
+                expected: 8,
+                actual: 2
+            })
+        );
     }
 }

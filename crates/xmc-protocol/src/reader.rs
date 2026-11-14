@@ -1,8 +1,4 @@
-use crate::{END, Frame, FrameError, MAX_PAYLOAD, START};
-
-/// Bound on buffered bytes while waiting for an end marker. A valid escaped
-/// frame is at most `2 * (MAX_PAYLOAD + 7) + 2` bytes long.
-const MAX_BUFFER: usize = 2 * (MAX_PAYLOAD + 7) + 2;
+use crate::{END, Frame, FrameError, MAX_WIRE_FRAME, START};
 
 /// Reassembles frames from an arbitrary stream of bytes (RFCOMM reads can split
 /// or merge frames).
@@ -64,7 +60,7 @@ impl FrameReader {
                     Ok(frame) => ReadEvent::Frame { frame, wire },
                     Err(error) => ReadEvent::Invalid { wire, error },
                 });
-            } else if self.buf.len() > MAX_BUFFER {
+            } else if self.buf.len() > MAX_WIRE_FRAME {
                 events.push(ReadEvent::Discarded(std::mem::take(&mut self.buf)));
                 self.in_frame = false;
             }
@@ -144,10 +140,10 @@ mod tests {
     #[test]
     fn overlong_garbage_is_bounded() {
         let mut stream = vec![START];
-        stream.extend(std::iter::repeat_n(0x11, MAX_BUFFER + 10));
+        stream.extend(std::iter::repeat_n(0x11, MAX_WIRE_FRAME + 10));
         let mut r = FrameReader::new();
         let events = r.push(&stream);
         assert!(events.iter().any(|e| matches!(e, ReadEvent::Discarded(_))));
-        assert!(r.buf.len() <= MAX_BUFFER);
+        assert!(r.buf.len() <= MAX_WIRE_FRAME);
     }
 }

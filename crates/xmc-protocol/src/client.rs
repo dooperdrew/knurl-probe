@@ -186,8 +186,9 @@ impl Client {
                         // NcAsmMode does not: the setting group and the level.
                         let s = &mut self.state;
                         let before = (s.nc_three_way, s.ambient_level);
-                        s.nc_three_way = Some(payload[3] == 0x02);
-                        s.ambient_level = Some(payload[7]);
+                        s.nc_three_way = payload.get(3).map(|&b| b == 0x02);
+                        s.ambient_level = payload.get(7).copied();
+
                         let detail_changed = before != (s.nc_three_way, s.ambient_level);
                         if self.apply(message) || detail_changed {
                             out.push(ClientEvent::StateChanged);
