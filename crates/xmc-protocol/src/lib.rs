@@ -42,3 +42,6 @@ pub const ESCAPE_MASK: u8 = 0x10;
 /// Largest payload this codec accepts. Real MDR payloads are tiny; this bound
 /// protects against garbage length fields allocating huge buffers.
 pub const MAX_PAYLOAD: usize = 4096;
+/// Bound on valid escaped wire bytes. A valid frame with up to `MAX_PAYLOAD` bytes
+/// requires at most `2 * (MAX_PAYLOAD + 7) + 2` bytes on the wire.
+pub const MAX_WIRE_FRAME: usize = 2 * (MAX_PAYLOAD + 7) + 2;

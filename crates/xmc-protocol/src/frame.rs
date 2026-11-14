@@ -1,4 +1,4 @@
-use crate::{END, ESCAPE, ESCAPE_MASK, MAX_PAYLOAD, START};
+use crate::{END, ESCAPE, ESCAPE_MASK, MAX_PAYLOAD, MAX_WIRE_FRAME, START};
 
 /// The kind of frame, carried in the first byte after the start marker.
 ///
@@ -121,7 +121,11 @@ impl Frame {
 
     /// Decodes one complete wire frame, markers included.
     pub fn decode(wire: &[u8]) -> Result<Self, FrameError> {
+        if wire.len() > MAX_WIRE_FRAME {
+            return Err(FrameError::PayloadTooLarge(wire.len()));
+        }
         let (&first, rest) = wire.split_first().ok_or(FrameError::MissingStart)?;
+
         if first != START {
             return Err(FrameError::MissingStart);
         }
@@ -314,5 +318,14 @@ mod tests {
         let back = Frame::decode(&f.encode()).expect("valid frame");
         assert_eq!(back.data_type, DataType::Other(0x7F));
         assert_eq!(DataType::from_byte(0x7F).to_byte(), 0x7F);
+    }
+
+    #[test]
+    fn rejects_wire_frame_exceeding_max_wire_bound() {
+        let oversized = vec![START; MAX_WIRE_FRAME + 1];
+        assert_eq!(
+            Frame::decode(&oversized),
+            Err(FrameError::PayloadTooLarge(MAX_WIRE_FRAME + 1))
+        );
     }
 }
