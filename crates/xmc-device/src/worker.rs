@@ -212,6 +212,9 @@ fn drop_commands(commands: &Receiver<Request>, tx: &Sender<DeviceEvent>) {
 }
 
 fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool) {
+    // With more than one supported pair paired (an XM3 and an XM4), each try
+    // takes the next one, so a pair that is off does not hide the other.
+    let mut turn: usize = 0;
     while !stop.load(Ordering::Relaxed) {
         drop_commands(commands, tx);
         let headphones = match bluetooth::paired_supported_headphones() {
@@ -224,13 +227,15 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
                 continue;
             }
         };
-        let Some(target) = headphones.into_iter().next() else {
+        let count = headphones.len();
+        let Some(target) = headphones.into_iter().nth(pick(turn, count)) else {
             let _ = tx.send(DeviceEvent::NoHeadphones);
             if !wait(stop, RETRY_DELAY) {
                 return;
             }
             continue;
         };
+        turn = turn.wrapping_add(1);
         let reason = session(&target, tx, commands, stop);
         let _ = tx.send(DeviceEvent::Disconnected {
             name: target.name.clone(),
@@ -240,6 +245,11 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
             return;
         }
     }
+}
+
+/// Which of `count` paired headphones the try number `turn` uses.
+fn pick(turn: usize, count: usize) -> usize {
+    if count == 0 { 0 } else { turn % count }
 }
 
 /// Something that can be shut down to unblock a reader on another thread.
@@ -480,5 +490,12 @@ mod tests {
         let socket = Arc::new(FakeSocket::default());
         drop(ShutdownOnDrop(socket.clone()));
         assert!(socket.shut.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn tries_take_each_paired_headphones_in_turn() {
+        assert_eq!((0..4).map(|t| pick(t, 2)).collect::<Vec<_>>(), [0, 1, 0, 1]);
+        assert_eq!(pick(5, 1), 0);
+        assert_eq!(pick(3, 0), 0);
     }
 }

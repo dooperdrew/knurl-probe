@@ -43,6 +43,11 @@ impl FrameReader {
                     self.buf.push(b);
                 } else {
                     junk.push(b);
+                    // Long noise is reported in pieces, so the buffer stays
+                    // bounded whatever arrives between frames.
+                    if junk.len() >= crate::MAX_WIRE_FRAME {
+                        events.push(ReadEvent::Discarded(std::mem::take(&mut junk)));
+                    }
                 }
                 continue;
             }
@@ -145,5 +150,18 @@ mod tests {
         let events = r.push(&stream);
         assert!(events.iter().any(|e| matches!(e, ReadEvent::Discarded(_))));
         assert!(r.buf.len() <= MAX_WIRE_FRAME);
+    }
+
+    #[test]
+    fn long_noise_is_discarded_in_bounded_pieces() {
+        let noise = vec![0x55u8; crate::MAX_WIRE_FRAME * 2 + 10];
+        let events = FrameReader::new().push(&noise);
+        assert!(events.len() >= 3);
+        for e in &events {
+            match e {
+                ReadEvent::Discarded(bytes) => assert!(bytes.len() <= crate::MAX_WIRE_FRAME),
+                other => panic!("unexpected {other:?}"),
+            }
+        }
     }
 }

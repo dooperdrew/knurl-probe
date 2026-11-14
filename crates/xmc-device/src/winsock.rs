@@ -4,10 +4,13 @@
 //! WH-1000XM3 (2026-11-07) WinRT listed no MDR service, while this connected
 //! to MDR v1.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows::Win32::Devices::Bluetooth::{AF_BTH, BTHPROTO_RFCOMM, SOCKADDR_BTH};
+
 use windows::Win32::Networking::WinSock::{
-    SD_BOTH, SEND_RECV_FLAGS, SOCK_STREAM, SOCKADDR, SOCKET, WSACleanup, WSADATA, WSAGetLastError,
-    WSAStartup, closesocket, connect, recv, send, shutdown, socket,
+    SD_BOTH, SEND_RECV_FLAGS, SO_RCVTIMEO, SOCK_STREAM, SOCKADDR, SOCKET, SOL_SOCKET, WSACleanup,
+    WSADATA, WSAETIMEDOUT, WSAGetLastError, WSAStartup, closesocket, connect, recv, send,
+    setsockopt, shutdown, socket,
 };
 use windows::core::GUID;
 
@@ -41,7 +44,14 @@ impl Drop for WsaGuard {
 pub struct RfcommSocket {
     socket: SOCKET,
     _wsa: WsaGuard,
+    /// Set by `shutdown`: a `recv` that times out then returns as closed.
+    closing: AtomicBool,
 }
+
+/// How long one `recv` waits before checking whether the socket is closing.
+/// `shutdown` alone is not documented to wake a `recv` blocked on an AF_BTH
+/// socket, so the reader never waits longer than this after a shutdown.
+const RECV_TIMEOUT_MS: u32 = 1000;
 
 impl RfcommSocket {
     /// Sends every byte of `bytes`.
@@ -58,20 +68,32 @@ impl RfcommSocket {
         Ok(())
     }
 
-    /// Blocks until data arrives. `Ok(0)` means the remote side closed.
+    /// Blocks until data arrives. `Ok(0)` means the remote side closed, or
+    /// that this socket was shut down (seen within [`RECV_TIMEOUT_MS`]).
     pub fn recv(&self, buf: &mut [u8]) -> Result<usize, String> {
-        // SAFETY: `self.socket` is open for the lifetime of `self` and `buf`
-        // is a valid, writable slice.
-        let n = unsafe { recv(self.socket, buf, SEND_RECV_FLAGS(0)) };
-        if n < 0 {
-            return Err(last_error("recv"));
+        loop {
+            // SAFETY: `self.socket` is open for the lifetime of `self` and
+            // `buf` is a valid, writable slice.
+            let n = unsafe { recv(self.socket, buf, SEND_RECV_FLAGS(0)) };
+            if n >= 0 {
+                return Ok(n as usize);
+            }
+            // SAFETY: called right after the failing recv on this thread.
+            let err = unsafe { WSAGetLastError() };
+            if err != WSAETIMEDOUT {
+                return Err(format!("recv failed: WSA error {}", err.0));
+            }
+            // Only a timeout: nothing arrived. Stop if we are closing.
+            if self.closing.load(Ordering::Acquire) {
+                return Ok(0);
+            }
         }
-        Ok(n as usize)
     }
 
-    /// Shuts both directions down, which unblocks a pending `recv` in another
-    /// thread.
+    /// Shuts both directions down. A `recv` blocked in another thread
+    /// returns at the latest when its timeout expires.
     pub fn shutdown(&self) {
+        self.closing.store(true, Ordering::Release);
         // SAFETY: `self.socket` is open for the lifetime of `self`.
         unsafe {
             shutdown(self.socket, SD_BOTH);
@@ -102,7 +124,17 @@ pub fn connect_rfcomm(address: u64, service: GUID) -> Result<RfcommSocket, Strin
     // SAFETY: plain socket creation with constant, valid arguments.
     let socket = unsafe { socket(i32::from(AF_BTH), SOCK_STREAM, BTHPROTO_RFCOMM as i32) }
         .map_err(|e| format!("socket(AF_BTH) failed: {e}"))?;
-    let opened = RfcommSocket { socket, _wsa: wsa };
+    let opened = RfcommSocket {
+        socket,
+        _wsa: wsa,
+        closing: AtomicBool::new(false),
+    };
+    let timeout = RECV_TIMEOUT_MS.to_le_bytes();
+    // SAFETY: `opened.socket` is a valid socket; SO_RCVTIMEO takes a DWORD in
+    // milliseconds, passed as its 4 bytes.
+    if unsafe { setsockopt(opened.socket, SOL_SOCKET, SO_RCVTIMEO, Some(&timeout)) } != 0 {
+        return Err(last_error("setsockopt(SO_RCVTIMEO)"));
+    }
     let addr = SOCKADDR_BTH {
         addressFamily: AF_BTH,
         btAddr: address,
