@@ -89,10 +89,11 @@ impl Frame {
 
     /// Encodes the frame to its escaped wire form, markers included.
     ///
-    /// # Panics
-    /// Never: payloads longer than `u32::MAX` cannot exist on supported targets'
-    /// realistic memory, but the length is still checked and saturated to avoid
-    /// a silent truncation.
+    /// Never panics. The length field is 32 bits: a payload longer than
+    /// `u32::MAX` bytes cannot be described, so its length is written as
+    /// `u32::MAX` rather than truncated. Such a frame (like any payload over
+    /// [`MAX_PAYLOAD`](crate::MAX_PAYLOAD)) is not valid: [`Frame::decode`]
+    /// rejects it. Every request this crate builds is a few bytes long.
     pub fn encode(&self) -> Vec<u8> {
         let len = u32::try_from(self.payload.len())
             .unwrap_or(u32::MAX)
