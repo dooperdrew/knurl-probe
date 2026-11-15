@@ -22,7 +22,7 @@ mod capture;
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
-#[command(version, about = "XMCompanion hardware-spike probe")]
+#[command(version, about = "Knurl hardware-spike probe")]
 struct Cli {
     #[command(subcommand)]
     command: Command,

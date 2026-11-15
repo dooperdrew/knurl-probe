@@ -1,4 +1,4 @@
-//! Windows side of XMCompanion: finds the paired headphones, opens the Sony
+//! Windows side of Knurl: finds the paired headphones, opens the Sony
 //! MDR channel over Winsock and runs [`xmc_protocol::client::Client`] on a
 //! background thread.
 //!

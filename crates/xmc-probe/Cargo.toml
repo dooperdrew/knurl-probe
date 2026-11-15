@@ -1,6 +1,6 @@
 [package]
 name = "xmc-probe"
-description = "Diagnostic and capture tool for the XMCompanion hardware spike"
+description = "Diagnostic and capture tool for the Knurl hardware spike"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
