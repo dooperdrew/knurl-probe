@@ -10,14 +10,15 @@
 //! Nothing here interprets opcodes: the capture files are the ground truth the
 //! real protocol layer will be built and tested against.
 
-mod log;
-
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
 mod bluetooth;
 #[cfg(windows)]
 mod capture;
+// The capture log is written only by `capture`.
+#[cfg(windows)]
+mod log;
 
 use clap::{Parser, Subcommand, ValueEnum};
 

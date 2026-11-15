@@ -5,13 +5,22 @@
 //! Verified on our WH-1000XM3 (2026-11-07): the MDR v1 service is reachable
 //! only through Winsock `AF_BTH`; the WinRT RFCOMM lookup does not list it.
 
-#![cfg(windows)]
+//!
+//! Only [`DeviceEvent`] exists on other platforms: the connection itself is
+//! Windows-only, and the event type lets the app's pure logic build and be
+//! tested anywhere.
 
+#[cfg(windows)]
 pub mod bluetooth;
+mod event;
+#[cfg(windows)]
 pub mod winsock;
+#[cfg(windows)]
 mod worker;
 
-pub use worker::{DeviceEvent, Worker};
+pub use event::DeviceEvent;
+#[cfg(windows)]
+pub use worker::Worker;
 
 /// Keeps the process's COM multithreaded apartment (MTA) alive until the
 /// process exits. Call it before the first WinRT call on a thread.
@@ -24,6 +33,7 @@ pub use worker::{DeviceEvent, Worker};
 /// lookup called the cached factory inside the unloaded DLL: access violation.
 /// The usage reference taken here is never released, so the MTA, and with it
 /// the DLLs, stay as long as the app runs.
+#[cfg(windows)]
 pub fn keep_com_apartment() -> Result<(), String> {
     use std::sync::OnceLock;
     static KEPT: OnceLock<Result<(), String>> = OnceLock::new();
@@ -37,7 +47,7 @@ pub fn keep_com_apartment() -> Result<(), String> {
     .clone()
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     #[test]
     fn the_apartment_is_kept_once_and_reported() {
