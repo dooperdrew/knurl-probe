@@ -3,7 +3,7 @@
 
 # Captures from real headphones hold the device's Bluetooth address: keep raw dumps local
 /captures/raw/
-# Reports written by `knurl-probe report` before they are checked and attached to an issue
+# Reports written by `knurl-probe run` before they are checked and attached to an issue
 /reports/
 
 # Release zips built locally
