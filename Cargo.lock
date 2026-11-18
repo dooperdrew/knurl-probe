@@ -131,6 +131,7 @@ dependencies = [
  "clap",
  "knurl-device",
  "knurl-protocol",
+ "knurl-report",
  "serde",
  "serde_json",
  "windows",
@@ -141,6 +142,15 @@ name = "knurl-protocol"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "knurl-report"
+version = "0.1.0"
+dependencies = [
+ "knurl-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

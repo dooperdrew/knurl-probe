@@ -16,6 +16,8 @@ mod audio;
 mod bluetooth;
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod report;
 // The capture log is written only by `capture`.
 #[cfg(windows)]
 mod log;
@@ -65,6 +67,16 @@ enum Command {
         /// Include disabled, unplugged and not-present endpoints.
         #[arg(long)]
         all: bool,
+    },
+    /// Check one pair of headphones read-only and write a report to attach to
+    /// a "New headphone model" issue (no Bluetooth address, no personal names).
+    Report {
+        /// Part of the device name; needed only when several are paired.
+        #[arg(long)]
+        device: Option<String>,
+        /// Folder for the report. Default: reports/
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
     },
     /// Connect to the headphones and record the MDR traffic.
     Capture {
@@ -125,6 +137,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::Audio { all } => audio::print_endpoints(all),
+        Command::Report { device, out } => report::run(report::Options {
+            device,
+            out_dir: out,
+        }),
         Command::Capture {
             device,
             service,

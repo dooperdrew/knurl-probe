@@ -117,6 +117,14 @@ impl Client {
         &self.state
     }
 
+    /// True once [`Client::start`] ran and nothing is queued or waiting for
+    /// an answer: the start-up sequence and any command are finished,
+    /// answered or failed. The periodic battery refresh queues a request
+    /// again after [`BATTERY_REFRESH_MS`].
+    pub fn is_idle(&self) -> bool {
+        self.started && self.queue.is_empty() && self.in_flight.is_none() && !self.session.is_busy()
+    }
+
     /// Queues the start-up sequence and sends its first request.
     pub fn start(&mut self, now: u64) -> Vec<ClientEvent> {
         self.started = true;

@@ -16,12 +16,13 @@ This repository also holds the code Knurl uses to talk to the headphones: the pr
 - the second Sony service (MDR v2), which public sources say newer models use: the probe can open it but nothing decodes it yet.
 
 ## What it does
-No command changes Windows settings. `rfcomm-check` sends no data and `watch` sends only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
+No command changes Windows settings. `rfcomm-check` sends no data; `watch` and `report` send only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
 
 | Command | What it does |
 |---|---|
 | `devices` | Lists paired devices that expose a Sony MDR service (`--all-services` also lists every RFCOMM service they report) |
 | `rfcomm-check --device <name>` | Opens each MDR service and closes it again; sends no data |
+| `report` | Checks the headphones read-only (model, firmware, protocol, the features they declare, battery and settings on MDR v1; on MDR v2 only the protocol question) and writes a report with no Bluetooth address and no personal names, to attach to a "New headphone model" issue (`--device` when several are paired) |
 | `capture --device <name>` | Connects and records every byte in both directions to a JSON-lines file (`--guided` walks you through a test session) |
 | `watch` | Runs the same connection thread as the Knurl app and prints what it reports (WH-1000XM3 and WH-1000XM4 only) |
 | `audio` | Lists the Windows audio endpoints, to tell the headphones' stereo and call (Hands-Free) devices apart |

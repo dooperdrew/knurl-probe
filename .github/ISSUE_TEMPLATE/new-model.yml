@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you. Please do not attach a raw capture (`captures/raw/`): it holds your headphones' Bluetooth address. Paste the output of `knurl-probe devices` below; a `report` command that writes a file safe to attach is being built.
+        Thank you. Run `knurl-probe report` with the headphones on and attach the file it writes in `reports/`: it holds no Bluetooth address and no personal names. Please do not attach a raw capture (`captures/raw/`): that one holds your headphones' Bluetooth address.
   - type: input
     id: model
     attributes:
@@ -21,10 +21,10 @@ body:
       label: Firmware version
       description: From Sony's phone app (Headphones Connect / Sound Connect), if you know it.
   - type: textarea
-    id: devices
+    id: report
     attributes:
-      label: Output of `knurl-probe devices`
-      render: text
+      label: The report
+      description: Drag the file from `reports/` here, or paste what `knurl-probe report` printed.
     validations:
       required: true
   - type: textarea

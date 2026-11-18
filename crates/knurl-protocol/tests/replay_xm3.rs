@@ -168,11 +168,21 @@ fn client_replay_builds_the_device_state() {
 
     // The client paces its own requests (next one as soon as the previous is
     // answered); the capture answered them in the same order.
+    assert!(!client.is_idle(), "not started yet");
     collect(client.start(0));
+    assert!(!client.is_idle(), "the start-up sequence is queued");
+    let mut idle_at = None;
     for line in lines().into_iter().filter(|l| !l.tx) {
+        if idle_at.is_none() && client.is_idle() {
+            idle_at = Some(line.t);
+        }
         collect(client.poll(line.t));
         collect(client.receive(&line.wire, line.t));
     }
+
+    // The seven start-up requests are all answered by the equalizer reply
+    // (5904 ms); the client is idle before the next frame arrives.
+    assert_eq!(idle_at, Some(5914), "idle after the last start-up reply");
 
     let captured_tx: Vec<Vec<u8>> = lines()
         .into_iter()
