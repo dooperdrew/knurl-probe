@@ -12,11 +12,21 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Runners. The Windows jobs run on our self-hosted runner (the repo variable
+# BEDROCK_RUNNER, a JSON label list such as ["self-hosted","Windows","X64"])
+# when it is set, else on GitHub-hosted windows-latest. Two cases always go to
+# GitHub-hosted, never to the owner's PC: Dependabot, and pull requests from
+# forks (this repository is meant to be public: a fork's code must not run on
+# the PC). BEDROCK_HOSTED=off says the account has no hosted minutes: then the
+# jobs that would need them are skipped, visibly, instead of failing unstarted.
+
 jobs:
   linux:
     name: fmt / clippy / test (Linux)
     # The protocol and its tests have no I/O, so they run here; the Windows
     # code is checked with clippy for the Windows target too.
+    # GitHub-hosted only; the Windows job runs the same tests on Windows.
+    if: vars.BEDROCK_HOSTED != 'off'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -39,8 +49,13 @@ jobs:
 
   windows:
     name: test / package (Windows)
-    runs-on: windows-latest
-    timeout-minutes: 30
+    if: vars.BEDROCK_HOSTED != 'off' || (vars.BEDROCK_RUNNER != '' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ${{ fromJSON((github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && '"windows-latest"' || vars.BEDROCK_RUNNER || '"windows-latest"') }}
+    timeout-minutes: 45
+    env:
+      # Next to the checkout, not in it: the checkout cleans target/, and on
+      # the self-hosted runner every run would rebuild every crate.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/../knurl-probe-target
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,17 +63,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
+          components: rustfmt, clippy
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test
         run: cargo test --workspace --locked
       - name: release build
         run: cargo build --release --locked -p knurl-probe
       - name: zip and check it (same script as the release)
-        run: python scripts/package.py --exe target/release/knurl-probe.exe --out dist
+        shell: pwsh
+        run: python scripts/package.py --exe "$env:CARGO_TARGET_DIR/release/knurl-probe.exe" --out dist
 
   deny:
     name: cargo deny
-    runs-on: ubuntu-latest
+    # Same runner as the Windows job: cargo-deny runs the same on Windows, and
+    # on the self-hosted runner `cargo install` of an installed version is a
+    # no-op.
+    if: vars.BEDROCK_HOSTED != 'off' || (vars.BEDROCK_RUNNER != '' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ${{ fromJSON((github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && '"windows-latest"' || vars.BEDROCK_RUNNER || '"windows-latest"') }}
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/../knurl-probe-target
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
