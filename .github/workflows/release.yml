@@ -18,7 +18,9 @@ concurrency:
 jobs:
   zip:
     name: windows zip
-    runs-on: windows-latest
+    # Only a tag pushed by the owner starts this: the self-hosted runner
+    # (BEDROCK_RUNNER) when set, else GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.BEDROCK_RUNNER || '"windows-latest"') }}
     timeout-minutes: 45
     permissions:
       contents: write
