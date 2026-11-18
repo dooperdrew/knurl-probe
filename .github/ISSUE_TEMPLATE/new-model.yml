@@ -1,0 +1,34 @@
+name: New headphone model
+description: Your Sony headphones are not supported by Knurl yet, and you ran knurl-probe on them.
+title: "Model: <model name> (firmware <version>)"
+labels: ["new-model"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Please do not attach a raw capture (`captures/raw/`): it holds your headphones' Bluetooth address. Paste the output of `knurl-probe devices` below; a `report` command that writes a file safe to attach is being built.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: As Windows shows it in Bluetooth settings, without the `LE_` entry.
+      placeholder: WH-1000XM5
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: From Sony's phone app (Headphones Connect / Sound Connect), if you know it.
+  - type: textarea
+    id: devices
+    attributes:
+      label: Output of `knurl-probe devices`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: What you tried, what the headphones did, Windows version.

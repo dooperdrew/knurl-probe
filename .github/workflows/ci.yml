@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: fmt / clippy / test (Linux)
+    # The protocol and its tests have no I/O, so they run here; the Windows
+    # code is checked with clippy for the Windows target too.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Windows target for clippy
+        run: rustup target add x86_64-pc-windows-msvc
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy (Linux)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: clippy (Windows target)
+        run: cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
+      - name: test
+        run: cargo test --workspace --locked
+
+  windows:
+    name: test / package (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: test
+        run: cargo test --workspace --locked
+      - name: release build
+        run: cargo build --release --locked -p knurl-probe
+      - name: zip and check it (same script as the release)
+        run: python scripts/package.py --exe target/release/knurl-probe.exe --out dist
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: install cargo-deny
+        run: cargo install cargo-deny --locked --version 0.20.2
+      - name: cargo deny check
+        run: cargo deny --locked check

@@ -1,0 +1,79 @@
+name: Release
+
+# A tag v<version> equal to Cargo.toml's version builds knurl-probe.exe,
+# zips it with the READMEs, licences and third-party notices, checks the zip
+# (scripts/package.py) and attaches it to a DRAFT release. Publishing stays
+# a manual step.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  zip:
+    name: windows zip
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: The tag is on main
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          $status = gh api "repos/$env:REPO/compare/main...$env:SHA" --jq .status
+          if ($status -ne "identical" -and $status -ne "behind") {
+            Write-Error "Commit $env:SHA is not on main (compare status: $status)"
+            exit 1
+          }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Tag matches the workspace version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne $env:TAG) {
+            Write-Error "Tag $env:TAG does not match Cargo.toml version $version"
+            exit 1
+          }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --locked -p knurl-probe
+
+      - name: Zip and check it
+        shell: pwsh
+        run: |
+          $zip = (python scripts/package.py --exe target/release/knurl-probe.exe --out dist | Select-Object -Last 1)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          python scripts/package.py --notes $env:VERSION | Out-File -FilePath release-notes.md -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create $env:TAG $env:ZIP "$env:ZIP.sha256" --draft --verify-tag --title "knurl-probe $env:VERSION" --notes-file release-notes.md

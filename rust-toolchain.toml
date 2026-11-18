@@ -1,0 +1,5 @@
+[toolchain]
+# The exact Rust used by CI, the release and local builds, so a release does
+# not depend on whichever "stable" a machine has. Slint 1.18 needs >= 1.92.
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]

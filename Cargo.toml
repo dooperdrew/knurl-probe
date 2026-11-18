@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/knurl-protocol",
+    "crates/knurl-device",
+    "crates/knurl-probe",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DooperDrew/knurl-probe"
+
+[workspace.dependencies]
+knurl-protocol = { path = "crates/knurl-protocol" }
+knurl-device = { path = "crates/knurl-device" }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "warn"

@@ -1,0 +1,22 @@
+# Rust build output (Cargo.lock is committed on purpose: this ships a binary)
+/target/
+
+# Captures from real headphones hold the device's Bluetooth address: keep raw dumps local
+/captures/raw/
+# Reports written by `knurl-probe report` before they are checked and attached to an issue
+/reports/
+
+# Release zips built locally
+/dist/
+
+# Local settings
+.claude/settings.local.json
+.claude/worktrees/
+.env
+.env.*
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
