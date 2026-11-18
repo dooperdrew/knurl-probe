@@ -1,0 +1,20 @@
+name: Richiesta · Feature request
+description: Un'idea o un miglioramento · An idea or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema da risolvere · Problem to solve
+      description: Per chi e perché, prima della soluzione · For whom and why, before the solution
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposta · Proposal
+  - type: textarea
+    id: done
+    attributes:
+      label: Fatto quando · Done when
+      description: Come si verifica che funziona · How we check that it works

@@ -1,0 +1,7 @@
+# zizmor configuration for bedrock. Every exception needs a reason and a revisit condition.
+rules:
+  # zizmor suggests the "$/..." self-repository syntax instead of "./..." for local
+  # reusable workflows. "./" is the syntax GitHub and actionlint document today;
+  # revisit when "$/" is documented by GitHub and supported by actionlint.
+  self-repository:
+    disable: true

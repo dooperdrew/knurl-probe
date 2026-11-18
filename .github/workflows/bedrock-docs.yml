@@ -1,0 +1,41 @@
+# Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
+# Documentation checks (skill bedrock-docs). Links are checked in every repo; the
+# index and the bilingual README only once the repo sets "docs:" in .bedrock.yml.
+name: bedrock docs
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: documentation
+    # Runner: the repo variable BEDROCK_RUNNER (JSON, e.g. ["self-hosted","bedrock"]),
+    # GitHub-hosted otherwise. Dependabot PRs (by actor or PR author) always run on GitHub's runners.
+    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
+    if: ${{ !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off') }}
+    runs-on: ${{ fromJSON(github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.BEDROCK_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Markdown links resolve
+        run: node .github/bedrock/docs-index.mjs --links
+
+      - name: docs index is up to date
+        run: node .github/bedrock/docs-index.mjs --check
+
+      - name: README in English and Italian
+        run: node .github/bedrock/docs-index.mjs --readme

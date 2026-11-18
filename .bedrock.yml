@@ -1,0 +1,34 @@
+# bedrock kit configuration. Edit "stacks", "adapters", "design" (path of the design reference), "docs" (modules, skill bedrock-docs) and "vendored" (folders of third-party files); bedrock sync writes the rest.
+bedrock: 0.20.2
+stacks:
+  - rust
+adapters:
+  - claude
+managed:
+  - .claude/bedrock/cloud-skills.json
+  - .claude/bedrock/install-skills.mjs
+  - .claude/bedrock/session-start.mjs
+  - .claude/settings.json
+  - .claude/skills/bedrock-design/SKILL.md
+  - .claude/skills/bedrock-docs/SKILL.md
+  - .claude/skills/bedrock-lesson/SKILL.md
+  - .claude/skills/brandkit/SKILL.md
+  - .claude/skills/design-flow/SKILL.md
+  - .github/bedrock/docs-index.mjs
+  - .github/bedrock/hosted-jobs-guarded.mjs
+  - .github/bedrock/install-linters.sh
+  - .github/bedrock/managed-via-sync.mjs
+  - .github/bedrock/migration-numbers.mjs
+  - .github/bedrock/node-test-args.mjs
+  - .github/bedrock/workflow-scripts-short.mjs
+  - .github/workflows/bedrock-actions-lint.yml
+  - .github/workflows/bedrock-docs.yml
+  - .github/workflows/bedrock-repo-checks.yml
+  - .github/workflows/bedrock-rust-ci.yml
+  - .github/workflows/bedrock.yml
+  - .github/zizmor.yml
+seeded:
+  - .gitattributes
+  - .github/ISSUE_TEMPLATE/bug.yml
+  - .github/ISSUE_TEMPLATE/feature.yml
+  - .github/pull_request_template.md

@@ -1,0 +1,29 @@
+# Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
+# Entry point for the checks every repo shares, whatever its stack. It runs on its
+# own, so a repo adopts them with the sync PR alone, without editing its ci.yml.
+name: bedrock
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bedrock-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  actions-lint:
+    name: workflow lint
+    uses: ./.github/workflows/bedrock-actions-lint.yml
+
+  repo-checks:
+    name: repo checks
+    uses: ./.github/workflows/bedrock-repo-checks.yml
+
+  docs:
+    name: docs
+    uses: ./.github/workflows/bedrock-docs.yml

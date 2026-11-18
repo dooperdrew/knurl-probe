@@ -1,0 +1,100 @@
+# Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
+# Reusable workflow: format, lint and test a Rust workspace.
+name: bedrock rust-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Folder that contains the Cargo workspace
+        type: string
+        default: "."
+      runs-on:
+        description: Runner label (empty = the repo variable BEDROCK_RUNNER, else windows-latest)
+        type: string
+        default: ""
+      on-push:
+        description: Also run on pushes to the default branch. Off by default - merges are fast-forwards of the commit the PR already verified, so a second run only repeats it
+        type: boolean
+        default: false
+      release-build:
+        description: Also build the workspace in release mode
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: fmt / clippy / test
+    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
+    if: (github.event_name != 'push' || inputs.on-push) && !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off')
+    # Runner: Dependabot PRs (by actor or PR author) are quarantined on GitHub-hosted.
+    # Otherwise the runs-on input, else the repo variable BEDROCK_RUNNER (JSON), else windows-latest.
+    runs-on: ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') && 'windows-latest' || (inputs.runs-on != '' && inputs.runs-on || fromJSON(vars.BEDROCK_RUNNER || '"windows-latest"')) }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      # On a self-hosted runner the checkout cleans the workspace (git clean -ffdx), which
+      # deletes target/ and rebuilds every crate: the build cache lives next to the
+      # checkout instead, one per repo. Lesson dooperdrew/bedrock#95.
+      - name: build cache outside the checkout
+        if: runner.environment != 'github-hosted'
+        run: |
+          dir="$(cd "$GITHUB_WORKSPACE/.." && (pwd -W 2>/dev/null || pwd))/.cargo-target"
+          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+          echo "Build cache kept between runs in $dir"
+
+      # GitHub-hosted only: on a self-hosted runner its cleanup deletes files from the
+      # user's own ~/.cargo/bin and registry, and the build cache above persists anyway.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: ${{ inputs.working-directory }}
+
+      - name: Cargo.lock is committed
+        shell: bash
+        run: git ls-files --error-unmatch Cargo.lock
+
+      # Build scripts and proc-macros of every dependency run with the runner's rights, on
+      # the user's PC: vet them. Lesson dooperdrew/bedrock#96.
+      - name: dependencies vetted with cargo deny
+        env:
+          DENY_VERSION: 0.20.2
+        run: |
+          if [ ! -f deny.toml ]; then
+            echo "::warning::no deny.toml: dependencies are not vetted (advisories, sources, bans); add one (rule rust-deps-vetted)"
+            echo "cargo deny skipped: this repo has no deny.toml" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if ! cargo deny --version >/dev/null 2>&1; then
+            cargo install cargo-deny --locked --version "$DENY_VERSION"
+          fi
+          cargo deny check advisories sources bans
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings -D clippy::undocumented_unsafe_blocks
+
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+      - name: cargo build --release
+        if: ${{ inputs.release-build }}
+        run: cargo build --workspace --release --locked

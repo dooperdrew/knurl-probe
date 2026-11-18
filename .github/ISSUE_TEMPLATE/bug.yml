@@ -1,0 +1,28 @@
+name: Problema · Bug
+description: Qualcosa non funziona come dovrebbe · Something does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Cosa succede · What happens
+      description: Cosa hai fatto, cosa ti aspettavi, cosa è successo · What you did, what you expected, what happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Come riprodurlo · How to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versione e ambiente · Version and environment
+      placeholder: "v0.3.1, Windows 11 23H2, ..."
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Log, schermate · Logs, screenshots
+      description: Niente dati personali o segreti · No personal data or secrets

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": ["Bash(gh repo create *)"],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f)",
+      "Bash(git push * -f *)",
+      "Bash(git push * +*)",
+      "Bash(git -C * push --force*)",
+      "Bash(git -C * push -f *)",
+      "Bash(git -C * push * --force*)",
+      "Bash(git -C * push * -f)",
+      "Bash(git -C * push * -f *)",
+      "Bash(git -C * push * +*)",
+      "Bash(git -C * push * --delete *)",
+      "Bash(git push * --delete *)",
+      "Bash(git push origin --delete *)",
+      "Bash(git push --delete *)",
+      "Bash(gh repo delete *)",
+      "Bash(gh repo edit *)",
+      "Bash(gh api -X DELETE *)",
+      "Bash(gh api --method DELETE *)",
+      "Bash(gh secret *)",
+      "Bash(gh auth *)",
+      "Bash(gh variable set *)",
+      "Bash(gh variable delete *)",
+      "Bash(gh release delete *)",
+      "Bash(gh issue delete *)",
+      "Bash(gh run cancel *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/bedrock/session-start.mjs\"",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

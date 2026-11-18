@@ -1,0 +1,47 @@
+# Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
+# Lints every GitHub Actions workflow of the repo: syntax and expressions (actionlint)
+# and security (zizmor: unpinned actions, broad permissions, credential leaks).
+# Runs on Linux and on Windows self-hosted runners (no docker, no pipx needed).
+name: bedrock actions-lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  actions:
+    name: actionlint / zizmor
+    # Runner: the repo variable BEDROCK_RUNNER (JSON, e.g. ["self-hosted","bedrock"]),
+    # GitHub-hosted otherwise. Dependabot PRs (by actor or PR author) always run on GitHub's runners.
+    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
+    if: ${{ !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off') }}
+    runs-on: ${{ fromJSON(github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.BEDROCK_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: install actionlint and shellcheck
+        shell: bash
+        run: bash .github/bedrock/install-linters.sh
+
+      - name: actionlint
+        shell: bash
+        run: actionlint -color
+
+      - name: zizmor
+        shell: bash
+        env:
+          # A per-run cache with copied files: on Windows, antivirus locks on the shared
+          # cache made the install fail.
+          UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+          UV_LINK_MODE: copy
+        run: uvx zizmor==1.32.0 --format plain .

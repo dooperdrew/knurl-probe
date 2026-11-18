@@ -1,0 +1,38 @@
+{
+  "//": "Generated from user-skills.yml by `npm run cloud-skills`: do not edit by hand.",
+  "skills": [
+    {
+      "name": "frontend-design",
+      "repo": "https://github.com/anthropics/skills",
+      "commit": "2c5958ecac7cee2b583967a2c4981d0f4a75c579",
+      "path": "skills/frontend-design",
+      "license": "Apache-2.0",
+      "license-files": ["skills/frontend-design/LICENSE.txt"]
+    },
+    {
+      "name": "impeccable",
+      "repo": "https://github.com/pbakaus/impeccable",
+      "commit": "ec229b48547f24685ffb22aa51c462c5ae27908c",
+      "path": ".claude/skills/impeccable",
+      "license": "Apache-2.0",
+      "license-files": ["LICENSE", "NOTICE.md"]
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "repo": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "9b675f0b13c9c28dec445e8ce4633c18c39b6467",
+      "path": ".claude/skills/ui-ux-pro-max",
+      "license": "MIT",
+      "license-files": ["LICENSE"]
+    },
+    {
+      "name": "design-taste-frontend",
+      "repo": "https://github.com/Leonxlnx/taste-skill",
+      "commit": "f6b76575f949707b4e3c37cd86cb44b0b98643e8",
+      "path": "skills/taste-skill",
+      "on-demand": true,
+      "license": "MIT",
+      "license-files": ["LICENSE"]
+    }
+  ]
+}

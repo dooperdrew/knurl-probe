@@ -1,0 +1,275 @@
+# Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
+# Repository hygiene checks that apply to every repo, whatever its stack.
+# Commit checks look only at the commits this PR or push adds, never at old history:
+# for a PR, the commits of its head that are neither in its base nor in the default
+# branch (so merging main into a stacked branch does not bring old commits in).
+name: bedrock repo-checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  repo:
+    name: repository hygiene
+    # Runner: the repo variable BEDROCK_RUNNER (JSON, e.g. ["self-hosted","bedrock"]),
+    # GitHub-hosted otherwise. Dependabot PRs (by actor or PR author) always run on GitHub's runners.
+    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
+    if: ${{ !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off') }}
+    runs-on: ${{ fromJSON(github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.BEDROCK_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: no ignored files are committed
+        shell: bash
+        run: |
+          tracked="$(git ls-files --cached --ignored --exclude-standard)"
+          if [ -n "$tracked" ]; then
+            echo "::error::Committed files that .gitignore excludes (remove them with git rm --cached):"
+            echo "$tracked"
+            exit 1
+          fi
+
+      - name: shell scripts use LF line endings
+        shell: bash
+        run: |
+          # A shell script with CRLF breaks under bash (a stray \r at the end of each line).
+          # Git for Windows checks text files out with CRLF unless .gitattributes says eol=lf.
+          # tr | wc reads the whole blob: no early exit, so no SIGPIPE under pipefail.
+          failed=0
+          count=0
+          while IFS= read -r -d '' f; do
+            count=$((count + 1))
+            crs="$(git cat-file blob ":$f" | tr -cd '\r' | wc -c)"
+            if [ "$crs" -gt 0 ]; then
+              echo "::error file=$f::$f is committed with CRLF line endings: convert it to LF"
+              failed=1
+            fi
+            eol="$(git check-attr -z eol -- "$f" | tr '\0' '\n' | sed -n 3p)"
+            if [ "$eol" != lf ]; then
+              echo "::error file=$f::$f gets no eol=lf from .gitattributes, so Windows checkouts turn it into CRLF: add '* text=auto eol=lf' or '*.sh text eol=lf'"
+              failed=1
+            fi
+          done < <(git ls-files -z -- '*.sh' '*.bash')
+          [ "$failed" = 0 ] && echo "$count shell script(s), all LF"
+          exit "$failed"
+
+      - name: workflows that call WSL keep it alive
+        shell: bash
+        run: |
+          # WSL2 stops its VM seconds after the last client exits, and every service inside it
+          # (PostgreSQL, Redis...) stops too, even when systemd enabled it. A workflow that uses
+          # WSL keeps a client running for the job, for example a background "-- sleep 3600",
+          # then waits for the service to answer. The match is case-sensitive on the command
+          # name and ignores comment lines.
+          failed=0
+          shopt -s nullglob
+          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+            code="$(sed 's/^[[:space:]]*#.*$//' "$f")"
+            if grep -qE '(^|[^[:alnum:]_./-])wsl(\.exe)?([[:space:]]|$)' <<< "$code" &&
+              ! grep -qE '(^|[^[:alnum:]_./-])wsl(\.exe)?[[:space:]].*[[:space:]]sleep[[:space:]]' <<< "$code"; then
+              echo "::error file=$f::$f runs WSL commands but never keeps WSL alive: start a background WSL sleep for the job and wait for the service before using it"
+              failed=1
+            fi
+          done
+          [ "$failed" = 0 ] && echo "no workflow uses WSL without a keep-alive"
+          exit "$failed"
+
+      - name: design reference exists
+        shell: bash
+        run: |
+          # The path is the "design:" key of .bedrock.yml (skill bedrock-design).
+          design=""
+          if [ -f .bedrock.yml ]; then
+            design="$(sed -n 's/^design:[[:space:]]*//p' .bedrock.yml | head -1 | sed 's/[[:space:]]#.*$//; s/[[:space:]]*$//' | tr -d '\r')"
+            design="${design#\"}"; design="${design%\"}"; design="${design#\'}"; design="${design%\'}"
+            case "$design" in "~" | null) design="" ;; esac
+          fi
+          if [ -z "$design" ]; then
+            echo "No design reference declared in .bedrock.yml: nothing to check."
+          elif [ -s "$design" ]; then
+            echo "design reference: $design"
+          else
+            echo "::error file=.bedrock.yml::design reference \"$design\" is missing or empty"
+            exit 1
+          fi
+
+      - name: vendored folders carry their licence
+        shell: bash
+        run: |
+          # Folders of third-party files copied into the repo: the "vendored:" key of
+          # .bedrock.yml, as a one-line inline list ([a, b]) or a block list ("- a").
+          # Any other form is reported, never skipped silently.
+          dirs=()
+          if [ -f .bedrock.yml ]; then
+            mapfile -t dirs < <(tr -d '\r' < .bedrock.yml | awk '
+              function strip(v) { sub(/[ \t]+#.*$/, "", v); sub(/^[ \t]*#.*$/, "", v); gsub(/^[ \t]+|[ \t]+$/, "", v); return v }
+              function emit(v) { v = strip(v); if (v != "") print v }
+              /^vendored:/ {
+                rest = $0; sub(/^vendored:/, "", rest); rest = strip(rest)
+                if (rest ~ /^\[/) {
+                  if (rest !~ /\]$/) { print "::unsupported::"; exit }
+                  gsub(/^\[|\]$/, "", rest); n = split(rest, a, ","); for (i = 1; i <= n; i++) emit(a[i]); exit
+                }
+                if (rest != "") { emit(rest); exit }
+                inlist = 1; next
+              }
+              inlist && /^[ \t]*-/ { v = $0; sub(/^[ \t]*-[ \t]*/, "", v); emit(v); next }
+              inlist && /^[ \t]*(#.*)?$/ { next }
+              inlist && /^[ \t]/ { print "::unsupported::"; exit }
+              inlist { exit }')
+          fi
+          shopt -s nocasematch
+          failed=0
+          checked=0
+          for d in "${dirs[@]}"; do
+            if [ "$d" = "::unsupported::" ]; then
+              echo "::error file=.bedrock.yml::write vendored as a one-line list ([a, b]) or as a block list of folders (- a)"; failed=1; continue
+            fi
+            d="${d#\"}"; d="${d%\"}"; d="${d#\'}"; d="${d%\'}"
+            case "$d" in "" | "~" | null) continue ;; esac   # an empty value: nothing declared
+            while [ "${d#./}" != "$d" ]; do d="${d#./}"; done
+            d="${d%/}"
+            case "$d" in
+              "" | . | /* | [A-Za-z]:* | *\\* | .. | ../* | */.. | */../*)
+                echo "::error file=.bedrock.yml::vendored folder \"$d\" must be a relative path inside the repo, with forward slashes"; failed=1; continue ;;
+            esac
+            checked=$((checked + 1))
+            files="$(git -c core.quotepath=off --literal-pathspecs ls-files -- "$d/")"
+            if [ -z "$files" ]; then
+              echo "::error file=.bedrock.yml::vendored folder \"$d\" has no tracked files"; failed=1; continue
+            fi
+            licence=""
+            while IFS= read -r f; do
+              name="${f#"$d"/}"
+              case "$name" in */*) continue ;; esac
+              case "$name" in LICENSE* | LICENCE* | COPYING*) licence="$f" ;; esac
+            done <<< "$files"
+            if [ -n "$licence" ]; then
+              echo "$d: licence $licence"
+            else
+              echo "::error file=.bedrock.yml::vendored folder \"$d\" has no licence file (LICENSE*, LICENCE* or COPYING*) at its top level"; failed=1
+            fi
+          done
+          if [ "$failed" = 0 ] && [ "$checked" = 0 ]; then echo "No vendored folders declared in .bedrock.yml: nothing to check."; fi
+          exit "$failed"
+
+      - name: no two migrations share a number
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/migration-numbers.mjs"
+
+      - name: workflow run blocks keep long scripts in files
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/workflow-scripts-short.mjs"
+
+      - name: node --test gets files or globs, not folders
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/node-test-args.mjs"
+
+      - name: hosted-only jobs skip when there are no hosted minutes
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/hosted-jobs-guarded.mjs"
+
+      - name: managed files change only in the bedrock sync PR
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/managed-via-sync.mjs"
+
+      - name: commits added by this change
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          list="$RUNNER_TEMP/bedrock-commits.txt"
+          if [ "$EVENT" = "pull_request" ]; then
+            exclude=("$PR_BASE")
+            if [ -n "$DEFAULT_BRANCH" ] && git rev-parse -q --verify "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null; then
+              exclude+=("refs/remotes/origin/$DEFAULT_BRANCH")
+            fi
+            git rev-list "$PR_HEAD" --not "${exclude[@]}" > "$list"
+            to="$PR_HEAD"
+          elif [ -n "$BEFORE" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            git rev-list "$AFTER" --not "$BEFORE" > "$list"
+            to="$AFTER"
+          else
+            # First push, or a force-push whose old tip is gone: only the pushed tip is known.
+            echo "::warning::previous commit unknown: checking only $AFTER"
+            echo "$AFTER" > "$list"
+            to="$AFTER"
+          fi
+          {
+            echo "BEDROCK_COMMITS=$list"
+            echo "BEDROCK_TO=$to"
+          } >> "$GITHUB_ENV"
+          echo "Checking $(wc -l < "$list") commit(s)"
+
+      - name: commit authors use the noreply identity
+        shell: bash
+        run: |
+          # Authors and committers must be GitHub noreply addresses. GitHub itself
+          # (noreply@github.com) may be the committer of a web merge, never the author.
+          if [ ! -s "$BEDROCK_COMMITS" ]; then echo "no commits to check"; exit 0; fi
+          bad="$(git log --no-walk=unsorted --stdin --format='%h %ae %ce' < "$BEDROCK_COMMITS" | awk '
+            $2 !~ /@users\.noreply\.github\.com$/ || ($3 !~ /@users\.noreply\.github\.com$/ && $3 != "noreply@github.com")')"
+          if [ -n "$bad" ]; then
+            echo "::error::Commits with a non-noreply email (commit, author, committer). Use the noreply identity; for web merges turn on GitHub Settings > Emails > Keep my email addresses private:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "all authors use a noreply address"
+
+      - name: no file over 5 MiB is added
+        shell: bash
+        run: |
+          limit=$((5 * 1024 * 1024))
+          failed=0
+          seen="$RUNNER_TEMP/bedrock-files.txt"
+          : > "$seen"
+          # Files added or modified by the checked commits (NUL-separated: any file name).
+          while IFS= read -r commit; do
+            git diff-tree -r -z --no-commit-id --name-only --no-renames --diff-filter=AM --root "$commit" >> "$seen"
+          done < "$BEDROCK_COMMITS"
+          while IFS= read -r -d '' f; do
+            git cat-file -e "$BEDROCK_TO:$f" 2>/dev/null || continue   # deleted again later
+            size="$(git cat-file -s "$BEDROCK_TO:$f")"
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::$f is $((size / 1024 / 1024)) MiB; keep generated binaries out of git (CI artifacts or LFS)"
+              failed=1
+            fi
+          done < <(sort -zu "$seen")
+          [ "$failed" = 0 ] && echo "no file over 5 MiB"
+          exit "$failed"
+
+      - name: PR title and body have no control characters
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # A body passed as a double-quoted PowerShell string turns `a, `b, `f, `v, `0, `e
+          # into control characters (`n, `t, `r become ordinary newlines and tabs, which no
+          # check can tell apart). Pass bodies with gh --body-file instead.
+          if LC_ALL=C grep -qP '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]' <<< "$TITLE"$'\n'"$BODY"; then
+            echo "::error::The PR title or body contains control characters (likely PowerShell backtick escapes). Rewrite it with: gh pr edit --body-file <file>"
+            exit 1
+          fi
+          echo "PR text is clean"
