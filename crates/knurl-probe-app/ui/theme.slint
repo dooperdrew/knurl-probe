@@ -1,0 +1,30 @@
+// Design tokens from design/tokens.json (design/README.md, section 2), the
+// same values as the Knurl app.
+// The theme follows Windows' light/dark setting through Slint's Palette.
+// tests/design_tokens.rs checks these values against tokens.json.
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <color> surface: dark ? #1C1D1F : #F7F7F5;
+    out property <color> card: dark ? #28292B : #FFFFFF;
+    out property <color> line: dark ? #3A3B3E : #DCDCD7;
+    out property <color> control: dark ? #75777B : #7E7F83;
+    out property <color> ink: dark ? #EEEEEB : #1C1D1F;
+    out property <color> muted: dark ? #A6A7A8 : #5C5E62;
+    out property <color> disabled: dark ? #66676B : #9A9B97;
+    out property <color> accent: dark ? #EF7A45 : #C2501B;
+    out property <color> accent-text: dark ? #EF7A45 : #A8431A;
+    out property <color> on-accent: dark ? #1C1D1F : #FFFFFF;
+    out property <color> accent-soft: dark ? #3A2A21 : #FBEADF;
+    out property <color> ok: dark ? #62C987 : #276B3C;
+    out property <color> warn: dark ? #F0B357 : #8A5300;
+    out property <color> warn-bg: dark ? #2C2416 : #FFF3DC;
+    out property <color> error: dark ? #FF8B7E : #B42318;
+    out property <color> error-bg: dark ? #3A1F1E : #FDECEA;
+    out property <color> track: dark ? #323336 : #ECECE8;
+    out property <color> track-hover: dark ? #36373A : #E4E4E1;
+    out property <color> slider-track: dark ? #46474B : #E0E0DB;
+    out property <color> panel: dark ? #232426 : #F2F2EF;
+}

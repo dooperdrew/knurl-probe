@@ -2,6 +2,7 @@
 bedrock: 0.20.2
 stacks:
   - rust
+design: design/README.md
 adapters:
   - claude
 managed:

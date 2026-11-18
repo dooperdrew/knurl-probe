@@ -1,0 +1,383 @@
+// Controls of the Knurl family, copied from the Knurl app
+// (DooperDrew/knurl, crates/xmc-app/ui/components.slint, 2026-11-18): the same
+// look, so Knurl Probe reads as part of Knurl (design/README.md). Slint's
+// Fluent accent is read-only, so anything that carries the accent is built
+// from Rectangle, Path and TouchArea.
+import { Theme } from "theme.slint";
+
+// Stroke icon on a 24x24 grid (the design's icon paths).
+export component StrokeIcon inherits Path {
+    in property <color> colour: Theme.ink;
+    in property <string> d;
+    commands: d;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    stroke: colour;
+    stroke-width: 1.6px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    fill: transparent;
+    width: 20px;
+    height: 20px;
+}
+
+// The Knurl mark: a knob seen from above, the orange index at 45 degrees
+// (design/icons, copied from Knurl's brand book), one per theme.
+export component KnobMark inherits Image {
+    in property <length> size: 16px;
+    width: size;
+    height: size;
+    source: Theme.dark ? @image-url("../../../design/icons/knob-dark.svg") : @image-url("../../../design/icons/knob.svg");
+}
+
+// Orange spinner (Fluent's Spinner would be blue). Draws a quarter arc that
+// turns once every 0.8 s.
+export component BrandSpinner inherits Rectangle {
+    in property <length> size: 20px;
+    width: size;
+    height: size;
+    property <angle> a: (animation-tick() / 800ms) * 360deg;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        stroke: Theme.slider-track;
+        stroke-width: 2px;
+        fill: transparent;
+        commands: "M 3 10 A 7 7 0 1 1 17 10 A 7 7 0 1 1 3 10";
+    }
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        stroke: Theme.accent;
+        stroke-width: 2px;
+        stroke-line-cap: round;
+        fill: transparent;
+        // Path elements, not a `commands` string: a number turned into
+        // text follows the language (a decimal comma in Italian or
+        // Spanish), which the path syntax cannot read.
+        MoveTo {
+            x: 10 + 7 * Math.cos(a);
+            y: 10 + 7 * Math.sin(a);
+        }
+        ArcTo {
+            radius-x: 7;
+            radius-y: 7;
+            sweep: true;
+            x: 10 + 7 * Math.cos(a + 90deg);
+            y: 10 + 7 * Math.sin(a + 90deg);
+        }
+    }
+}
+
+// Indeterminate progress bar of the search page: a third of the track that
+// slides across every 1.4 s.
+export component SearchBar inherits Rectangle {
+    height: 3px;
+    border-radius: 2px;
+    background: Theme.slider-track;
+    clip: true;
+    property <float> t: Math.mod(animation-tick() / 1400ms, 1);
+    Rectangle {
+        x: (parent.width * 1.35) * t - parent.width * 0.35;
+        width: parent.width * 0.35;
+        height: 100%;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+}
+
+// Button: orange when `primary` (Fluent's primary button would be blue),
+// otherwise neutral with the `control` border.
+export component BrandButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 32px;
+    min-width: label.preferred-width + 28px;
+    border-radius: 6px;
+    background: primary ? (enabled ? Theme.accent : Theme.disabled) : touch.has-hover && enabled ? Theme.track-hover : Theme.card;
+    border-width: primary ? 0px : 1px;
+    border-color: Theme.control;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-action-default => { if enabled { clicked(); } }
+    forward-focus: focus;
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(e) => {
+            if e.text == " " || e.text == "\n" {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            focus.focus();
+            root.clicked();
+        }
+    }
+    label := Text {
+        text: root.text;
+        font-size: 13px;
+        font-weight: 600;
+        color: root.primary ? Theme.on-accent : root.enabled ? Theme.ink : Theme.disabled;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    Rectangle {
+        x: -4px;
+        y: -4px;
+        width: parent.width + 8px;
+        height: parent.height + 8px;
+        border-radius: 9px;
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Theme.ink;
+    }
+}
+
+// Text link in the accent text colour: underlined on hover, focusable
+// (Space or Enter), with the ink focus ring.
+export component LinkText inherits Rectangle {
+    in property <string> text;
+    in property <color> colour: Theme.accent-text;
+    in property <length> font-size: 13px;
+    in property <int> font-weight: 600;
+    callback clicked();
+    min-width: label.preferred-width;
+    preferred-width: label.preferred-width;
+    min-height: label.preferred-height;
+    preferred-height: label.preferred-height;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-action-default => { clicked(); }
+    forward-focus: focus;
+    focus := FocusScope {
+        key-pressed(e) => {
+            if e.text == " " || e.text == "\n" {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    label := Text {
+        text: root.text;
+        color: root.colour;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        vertical-alignment: center;
+    }
+    // Hover: an underline in the link's colour.
+    Rectangle {
+        x: 0;
+        y: (parent.height + label.preferred-height) / 2 - 2px;
+        width: parent.width;
+        height: 1px;
+        background: touch.has-hover ? root.colour : transparent;
+    }
+    Rectangle {
+        x: -4px;
+        y: -4px;
+        width: parent.width + 8px;
+        height: parent.height + 8px;
+        border-radius: 4px;
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Theme.ink;
+    }
+}
+
+// A 24 px button with a cross, to close a notice. The same target size as
+// the Windows 11 caption controls' smallest (24 px), with a focus ring.
+export component CloseButton inherits Rectangle {
+    in property <string> label: @tr("Dismiss");
+    in property <color> colour: Theme.muted;
+    callback clicked();
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: touch.has-hover ? Theme.track-hover : transparent;
+    accessible-role: button;
+    accessible-label: label;
+    accessible-action-default => { clicked(); }
+    forward-focus: focus;
+    focus := FocusScope {
+        key-pressed(e) => {
+            if e.text == " " || e.text == "\n" {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    Rectangle {
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-radius: 8px;
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Theme.ink;
+    }
+    Path {
+        x: 7px;
+        y: 7px;
+        width: 10px;
+        height: 10px;
+        viewbox-width: 10;
+        viewbox-height: 10;
+        stroke: root.colour;
+        stroke-width: 1.5px;
+        stroke-line-cap: round;
+        fill: transparent;
+        commands: "M 1 1 L 9 9 M 9 1 L 1 9";
+    }
+}
+
+// Glyphs in a 16 px circle: a cross for errors, a question mark for the
+// headphones' questions, an "i" for notes. Different shapes, not only
+// colours (design/README.md, components).
+export component RowGlyph inherits Rectangle {
+    in property <int> kind; // 0 error, 1 question, 2 note
+    in property <color> colour;
+    width: 16px;
+    height: 16px;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        stroke: root.colour;
+        stroke-width: 1.5px;
+        stroke-line-cap: round;
+        fill: transparent;
+        commands: "M 8 1.5 A 6.5 6.5 0 1 1 8 14.5 A 6.5 6.5 0 1 1 8 1.5"
+            + (root.kind == 0 ? " M 5.8 5.8 L 10.2 10.2 M 10.2 5.8 L 5.8 10.2"
+            : root.kind == 1 ? " M 6.2 6.3 A 1.9 1.9 0 1 1 8.8 8.1 C 8.3 8.3 8 8.7 8 9.2 L 8 9.5"
+            : " M 8 7.2 L 8 10.8");
+    }
+    if root.kind != 0: Rectangle {
+        x: 7.4px;
+        y: root.kind == 1 ? 11px : 4.5px;
+        width: 1.2px;
+        height: 1.2px;
+        border-radius: 0.6px;
+        background: root.colour;
+    }
+}
+
+// A notice in the panel. Three grounds that read apart at a glance:
+// - error (cross): the red ground, the only tinted one besides mono's amber;
+// - question from the headphones (question mark): the card with an accent
+//   border, and two buttons;
+// - note (i): the card with the quiet `line` border.
+// `dismissable` adds the close button at the top right (24 px target).
+export component Notice inherits Rectangle {
+    in property <int> kind; // 0 error, 1 question, 2 note
+    in property <string> title;
+    in property <string> text;
+    // Question: `action` and `secondary` are the two buttons under the
+    // text. Error: `action` is a link under the text ("Retry").
+    in property <string> action;
+    in property <string> secondary;
+    in property <bool> dismissable;
+    callback action-clicked();
+    callback secondary-clicked();
+    callback dismissed();
+    border-radius: 8px;
+    background: kind == 0 ? Theme.error-bg : Theme.card;
+    border-width: kind == 0 ? 0px : 1px;
+    border-color: kind == 1 ? Theme.accent : Theme.line;
+    accessible-role: AccessibleRole.text;
+    accessible-label: title + ". " + text;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: root.dismissable ? 6px : 12px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: start;
+            padding-top: 2px;
+            RowGlyph {
+                kind: root.kind;
+                colour: root.kind == 0 ? Theme.error : root.kind == 1 ? Theme.accent-text : Theme.muted;
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+            if root.title != "": Text {
+                text: root.title;
+                font-size: 14px;
+                color: Theme.ink;
+                wrap: word-wrap;
+            }
+            if root.text != "": Text {
+                text: root.text;
+                font-size: 12px;
+                color: Theme.muted;
+                wrap: word-wrap;
+            }
+            if root.kind == 1 && (root.action != "" || root.secondary != ""): HorizontalLayout {
+                padding-top: 8px;
+                spacing: 8px;
+                alignment: start;
+                if root.action != "": BrandButton {
+                    text: root.action;
+                    primary: true;
+                    clicked => { root.action-clicked(); }
+                }
+                if root.secondary != "": BrandButton {
+                    text: root.secondary;
+                    clicked => { root.secondary-clicked(); }
+                }
+            }
+            if root.kind != 1 && root.action != "": HorizontalLayout {
+                padding-top: 4px;
+                alignment: start;
+                LinkText {
+                    text: root.action;
+                    clicked => { root.action-clicked(); }
+                }
+            }
+        }
+        if root.dismissable: VerticalLayout {
+            alignment: start;
+            // Lines the cross up with the title's first line.
+            padding-top: -3px;
+            CloseButton {
+                clicked => { root.dismissed(); }
+            }
+        }
+    }
+}
+
+// Card: a row or a block on the card ground, with a 1px line border.
+export component Card inherits Rectangle {
+    vertical-stretch: 0;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: 8px;
+}

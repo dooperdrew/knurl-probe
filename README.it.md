@@ -46,6 +46,21 @@ Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su c
 
 **Privacy:** una cattura grezza contiene l'indirizzo Bluetooth delle cuffie. Finisce in `captures/raw/`, che git ignora; in questo repository entrano solo i frame, senza l'indirizzo.
 
+## L'app
+**Knurl Probe** (`crates/knurl-probe-app`) fa lo stesso controllo di `run`, per chi non è tecnico: cinque schermate con l'aspetto di Knurl, chiaro e scuro (design: [design/README.md](design/README.md), in inglese).
+
+1. **Benvenuto:** cosa fa, cosa contiene il report e cosa non contiene mai (né l'indirizzo Bluetooth, né il nome del PC o dell'utente, né un nome dato alle cuffie).
+2. **Scegli le cuffie:** le cuffie Sony accoppiate con Windows; se non ce ne sono, come accoppiarle e "Open Bluetooth settings".
+3. **Controllo:** i passi, in sola lettura, su un thread separato.
+4. **Risultato** in parole semplici: già supportate, modello nuovo, servizio più recente non ancora decodificato, oppure niente letto, con cosa è stato letto.
+5. **Invio:** "Save to a file" (in Documenti\Knurl Probe), "See what will be sent" (il JSON esatto) e un link al modulo "New headphone model". **L'invio dall'app non c'è ancora:** il pulsante Send è visibile ma disattivato.
+
+```powershell
+cargo run --release -p knurl-probe-app
+```
+
+**Non ancora verificato:** l'app non ha mai girato su Windows né sulle cuffie; le schermate sono state controllate solo come immagini rese su Linux da `cargo run -p knurl-probe-app --example snapshot -- <cartella>`, con valori d'esempio. Non è ancora in una release, e i testi sono solo in inglese.
+
 ## Avviarlo dal sorgente
 Servono Windows 10 o 11, le cuffie accoppiate come Bluetooth classico (la voce senza `LE_`) e Rust (la versione esatta è in `rust-toolchain.toml`; rustup la installa).
 
@@ -57,7 +72,11 @@ cargo run --release -p knurl-probe -- capture --device WH-1000XM4 --guided
 ## Come è fatto
 ```mermaid
 flowchart LR
-    probe["knurl-probe<br/>riga di comando"] --> device["knurl-device<br/>Windows: ricerca Bluetooth, Winsock"]
+    app["knurl-probe-app<br/>Knurl Probe, Slint"] --> probe
+    app --> report
+    probe["knurl-probe<br/>riga di comando + controllo condiviso"] --> device["knurl-device<br/>Windows: ricerca Bluetooth, Winsock"]
+    probe --> report["knurl-report<br/>report, descrizioni<br/>(senza I/O)"]
+    report --> protocol
     probe --> protocol
     device --> protocol["knurl-protocol<br/>frame MDR, sessione, stato<br/>(senza I/O)"]
     device <-- "RFCOMM" --> phones(("Cuffie Sony"))
@@ -74,4 +93,4 @@ cargo fmt --all --check
 La CI fa i controlli Windows su un runner self-hosted sul PC del proprietario quando è impostata la variabile del repository `BEDROCK_RUNNER`, altrimenti sui runner di GitHub; Dependabot e le pull request dai fork girano sempre sui runner di GitHub, mai sul PC. Le modifiche arrivano su `main` con una pull request. Le regole per gli agenti sono in [CLAUDE.md](CLAUDE.md).
 
 ## Licenza
-MIT o Apache-2.0, a scelta ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Lo zip della release contiene `THIRD-PARTY-NOTICES.txt`, generato da `scripts/third_party_notices.py`, con le licenze dei crate compilati nell'exe. Non affiliato a Sony; Sony e WH-1000XM sono marchi dei rispettivi proprietari.
+MIT o Apache-2.0, a scelta ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Lo zip della release contiene `THIRD-PARTY-NOTICES.txt`, generato da `scripts/third_party_notices.py`, con le licenze dei crate compilati negli exe. L'app usa [Slint](https://slint.dev) con la licenza Slint Royalty-free 2.0, che chiede l'attribuzione: il badge "Made with Slint" nella prima schermata. Non affiliato a Sony; Sony e WH-1000XM sono marchi dei rispettivi proprietari.
