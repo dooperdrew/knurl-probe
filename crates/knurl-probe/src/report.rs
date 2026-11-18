@@ -1,4 +1,4 @@
-//! `knurl-probe report`: checks one pair of headphones read-only and writes
+//! `knurl-probe run`: checks one pair of headphones read-only and writes
 //! the report (crate `knurl-report`) to a file, with a short summary. The
 //! Bluetooth address is used to connect and never written anywhere.
 
@@ -179,17 +179,18 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
     let v1 = try_service(target.v1, MDR_V1, Service::V1, "MDR v1");
     let v2 = try_service(target.v2, MDR_V2, Service::V2, "MDR v2");
 
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
     let report = knurl_report::build(ReportInput {
-        probe_version: env!("CARGO_PKG_VERSION"),
+        tool: concat!("knurl-probe ", env!("CARGO_PKG_VERSION")),
+        date: &knurl_report::date_from_unix(secs),
         os: &os_version(),
         windows_name: &target.name,
         services: Services { v1, v2 },
         outcomes,
         problems,
     });
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
     let dir = opts.out_dir.unwrap_or_else(|| PathBuf::from("reports"));
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(knurl_report::file_name(&report, secs));
@@ -198,6 +199,28 @@ pub fn run(opts: Options) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     for line in knurl_report::summary(&report) {
         println!("{line}");
+    }
+    // Already described: a confirmation, or exactly the differences worth
+    // reporting.
+    if let Some(d) = report
+        .answers
+        .model
+        .as_deref()
+        .and_then(knurl_report::description::find_model)
+    {
+        let found = knurl_report::compare::compare(&report, &d);
+        if found.is_empty() {
+            println!(
+                "It agrees with the description {} ({}).",
+                d.id,
+                d.verification.status.id()
+            );
+        } else {
+            println!("It differs from the description {}:", d.id);
+            for line in crate::files::mismatch_lines(&found) {
+                println!("{line}");
+            }
+        }
     }
     println!();
     println!("Report written to {}", path.display());

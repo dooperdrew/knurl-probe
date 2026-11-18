@@ -16,16 +16,33 @@ This repository also holds the code Knurl uses to talk to the headphones: the pr
 - the second Sony service (MDR v2), which public sources say newer models use: the probe can open it but nothing decodes it yet.
 
 ## What it does
-No command changes Windows settings. `rfcomm-check` sends no data; `watch` and `report` send only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
+No command changes Windows settings. `rfcomm-check` sends no data; `watch` and `run` send only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
 
 | Command | What it does |
 |---|---|
 | `devices` | Lists paired devices that expose a Sony MDR service (`--all-services` also lists every RFCOMM service they report) |
 | `rfcomm-check --device <name>` | Opens each MDR service and closes it again; sends no data |
-| `report` | Checks the headphones read-only (model, firmware, protocol, the features they declare, battery and settings on MDR v1; on MDR v2 only the protocol question) and writes a report with no Bluetooth address and no personal names, to attach to a "New headphone model" issue (`--device` when several are paired) |
+| `run` | Checks the headphones read-only (model, firmware, protocol, the features they declare, battery and settings on MDR v1; on MDR v2 only the protocol question) and writes a report with no Bluetooth address and no personal names, to attach to a "New headphone model" issue (`--device` when several are paired) |
 | `capture --device <name>` | Connects and records every byte in both directions to a JSON-lines file (`--guided` walks you through a test session) |
 | `watch` | Runs the same connection thread as the Knurl app and prints what it reports (WH-1000XM3 and WH-1000XM4 only) |
 | `audio` | Lists the Windows audio endpoints, to tell the headphones' stereo and call (Hands-Free) devices apart |
+
+These run on any system and work on files only:
+
+| Command | What it does |
+|---|---|
+| `known` | Lists the model descriptions that ship with the probe (`headphones/`) and how far each is checked |
+| `check REPORT [--against FILE]` | Compares a report with a description; exit code 1 when they differ |
+| `draft REPORT --id ID --name NAME [--out FILE]` | Drafts the description of a new model from a report |
+| `validate FILE...` | Checks description files; exit code 1 when one is wrong |
+
+## Models
+Each model has a description in [`headphones/`](headphones): the service it answers on, its protocol version, firmware and the feature codes it declares, and how far that is checked (`unverified`, `reported` by one report, `verified` by two or more). Formats: [docs/format.md](docs/format.md). To add a model: [docs/contributing-headphones.md](docs/contributing-headphones.md).
+
+| Model | Status | Backed by |
+|---|---|---|
+| WH-1000XM3 | reported | the capture of 2026-11-07, replayed in a test that checks report and description agree |
+| WH-1000XM4 | unverified | public sources only |
 
 **Privacy:** a raw capture holds your headphones' Bluetooth address. It is written to `captures/raw/`, which git ignores; only the frames, without the address, ever go into this repository.
 

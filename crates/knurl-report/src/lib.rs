@@ -17,10 +17,13 @@ use knurl_protocol::client::{Client, ClientEvent, DeviceState};
 use knurl_protocol::message::{Charging, EQ_PRESETS, NcAsmMode, function_name};
 use knurl_protocol::session::{Config, Event, Session};
 use knurl_protocol::{FrameReader, ReadEvent};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+pub mod compare;
+pub mod description;
 
 /// Version of the report's layout; raised when a field changes meaning.
-pub const SCHEMA: u32 = 1;
+pub const REPORT_FORMAT: u32 = 1;
 
 /// How long a check may take before the report is written with what came.
 pub const TIMEOUT_MS: u64 = 15_000;
@@ -33,7 +36,7 @@ pub const V2_LISTEN_MS: u64 = 4_000;
 const PROTOCOL_INFO: [u8; 2] = [0x00, 0x00];
 
 /// What one Sony service gave.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum ServiceResult {
     /// Windows lists no such service for these headphones.
@@ -47,7 +50,7 @@ pub enum ServiceResult {
 }
 
 /// The two Sony control services.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Services {
     /// MDR v1: WH-1000XM3 and WH-1000XM4.
     pub v1: ServiceResult,
@@ -56,21 +59,21 @@ pub struct Services {
 }
 
 /// A function the headphones declare, by code and, when known, by name.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Function {
     pub code: String,
-    pub name: Option<&'static str>,
+    pub name: Option<String>,
 }
 
 /// What the headphones answered on the v1 service.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Answers {
     pub protocol_version: Option<String>,
     pub model: Option<String>,
     pub firmware: Option<String>,
     pub functions: Option<Vec<Function>>,
     pub battery_percent: Option<u8>,
-    pub charging: Option<&'static str>,
+    pub charging: Option<String>,
     pub noise: Option<String>,
     pub equalizer_preset: Option<String>,
     pub equalizer_bands: Option<[i8; 6]>,
@@ -87,15 +90,18 @@ impl Answers {
                     .iter()
                     .map(|&c| Function {
                         code: format!("0x{c:02X}"),
-                        name: function_name(c),
+                        name: function_name(c).map(str::to_string),
                     })
                     .collect()
             }),
             battery_percent: state.battery.map(|b| b.level),
-            charging: state.battery.map(|b| match b.charging {
-                Charging::Yes => "yes",
-                Charging::No => "no",
-                Charging::Unknown => "unknown",
+            charging: state.battery.map(|b| {
+                match b.charging {
+                    Charging::Yes => "yes",
+                    Charging::No => "no",
+                    Charging::Unknown => "unknown",
+                }
+                .to_string()
             }),
             noise: state.nc_asm.map(|m| match m {
                 NcAsmMode::Off => "off".to_string(),
@@ -129,18 +135,19 @@ impl Answers {
 }
 
 /// One frame on the wire, as in the test fixtures: time, direction, bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrameRecord {
     pub t_ms: u64,
-    pub dir: &'static str,
+    pub dir: String,
     pub hex: String,
 }
 
 /// What the report says, in one word, for the app's result screen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
-    /// The model is one Knurl supports (WH-1000XM3, WH-1000XM4).
+    /// A description of this model ships with the probe (`headphones/`):
+    /// Knurl supports it.
     Supported,
     /// The headphones answered, and Knurl does not know this model yet.
     NewModel,
@@ -151,10 +158,14 @@ pub enum Verdict {
 }
 
 /// Everything sent about one pair of headphones.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Report {
-    pub schema: u32,
-    pub probe_version: String,
+    /// [`REPORT_FORMAT`].
+    pub format: u32,
+    /// The tool and its version, e.g. "knurl-probe 0.1.0".
+    pub tool: String,
+    /// The day of the check, `YYYY-MM-DD` (UTC).
+    pub date: String,
     /// For example "Windows 10.0.26100".
     pub os: String,
     /// The Windows device name if it is a Sony model name, else a fixed
@@ -176,6 +187,21 @@ impl Report {
         // A Report holds strings, numbers and lists only: serialising it
         // cannot fail.
         serde_json::to_string_pretty(self).unwrap_or_default()
+    }
+
+    /// Reads a report written by [`Report::to_json`].
+    ///
+    /// # Errors
+    /// Not JSON, not a report, or a newer format than this tool reads.
+    pub fn from_json(text: &str) -> Result<Report, String> {
+        let report: Report = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        if report.format > REPORT_FORMAT {
+            return Err(format!(
+                "report format {} is newer than this tool ({REPORT_FORMAT})",
+                report.format
+            ));
+        }
+        Ok(report)
     }
 }
 
@@ -260,7 +286,7 @@ impl Collector {
     fn tx(&mut self, wire: &[u8], now: u64) {
         self.frames.push(FrameRecord {
             t_ms: now.saturating_sub(self.started_at),
-            dir: "tx",
+            dir: "tx".into(),
             hex: hex(wire),
         });
     }
@@ -327,7 +353,7 @@ impl Collector {
             };
             self.frames.push(FrameRecord {
                 t_ms: now.saturating_sub(self.started_at),
-                dir: "rx",
+                dir: "rx".into(),
                 hex: hex(&wire),
             });
         }
@@ -409,7 +435,10 @@ pub struct Outcome {
 
 /// Builds the report from what Windows offered and what each service gave.
 pub struct ReportInput<'a> {
-    pub probe_version: &'a str,
+    /// The tool and its version, e.g. "knurl-probe 0.1.0".
+    pub tool: &'a str,
+    /// `YYYY-MM-DD`, see [`date_from_unix`].
+    pub date: &'a str,
     pub os: &'a str,
     pub windows_name: &'a str,
     pub services: Services,
@@ -432,7 +461,7 @@ pub fn build(input: ReportInput<'_>) -> Report {
         problems.extend(outcome.problems);
     }
     let model = answers.model.clone().unwrap_or_default();
-    let verdict = if knurl_protocol::client::is_supported_model(&model) {
+    let verdict = if description::find_model(&model).is_some() {
         Verdict::Supported
     } else if !answers.is_empty() {
         Verdict::NewModel
@@ -442,8 +471,9 @@ pub fn build(input: ReportInput<'_>) -> Report {
         Verdict::NothingRead
     };
     Report {
-        schema: SCHEMA,
-        probe_version: input.probe_version.to_string(),
+        format: REPORT_FORMAT,
+        tool: input.tool.to_string(),
+        date: input.date.to_string(),
         os: input.os.to_string(),
         device_name: sanitize_device_name(input.windows_name),
         services: input.services,
@@ -452,6 +482,22 @@ pub fn build(input: ReportInput<'_>) -> Report {
         frames,
         problems,
     }
+}
+
+/// `YYYY-MM-DD` (UTC) of a time in seconds since 1970, without a date crate
+/// (days to civil date, Howard Hinnant's algorithm).
+pub fn date_from_unix(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// The report's file name: the model (or "headphones"), then the time in
@@ -536,6 +582,42 @@ mod tests {
     }
 
     #[test]
+    fn dates_from_unix_time() {
+        assert_eq!(date_from_unix(0), "1970-01-01");
+        // 2026-11-18 00:00:00 UTC and one second before.
+        assert_eq!(date_from_unix(1_794_960_000), "2026-11-18");
+        assert_eq!(date_from_unix(1_794_959_999), "2026-11-17");
+        // A leap day.
+        assert_eq!(date_from_unix(1_709_164_800), "2024-02-29");
+    }
+
+    #[test]
+    fn a_report_reads_back_what_it_wrote() {
+        let report = build(ReportInput {
+            tool: "knurl-probe 0.1.0",
+            date: "2026-11-18",
+            os: "Windows 10.0.26100",
+            windows_name: "WH-1000XM4",
+            services: Services {
+                v1: ServiceResult::Failed {
+                    reason: "refused".into(),
+                },
+                v2: ServiceResult::NotOffered,
+            },
+            outcomes: Vec::new(),
+            problems: vec!["could not open MDR v1".into()],
+        });
+        assert_eq!(Report::from_json(&report.to_json()), Ok(report.clone()));
+        let newer = report.to_json().replace("\"format\": 1", "\"format\": 99");
+        assert!(
+            Report::from_json(&newer)
+                .expect_err("newer format")
+                .contains("newer")
+        );
+        assert!(Report::from_json("not json").is_err());
+    }
+
+    #[test]
     fn hex_is_spaced_upper_case() {
         assert_eq!(hex(&[0x3E, 0x0C, 0x00]), "3E 0C 00");
         assert_eq!(hex(&[]), "");
@@ -544,7 +626,8 @@ mod tests {
     #[test]
     fn the_verdict_follows_what_was_read() {
         let base = |outcomes| ReportInput {
-            probe_version: "0.1.0",
+            tool: "knurl-probe 0.1.0",
+            date: "2026-11-18",
             os: "Windows 10.0.26100",
             windows_name: "My phones",
             services: Services {
@@ -560,7 +643,7 @@ mod tests {
             frames: if rx {
                 vec![FrameRecord {
                     t_ms: 10,
-                    dir: "rx",
+                    dir: "rx".into(),
                     hex: "3E 01".into(),
                 }]
             } else {
@@ -628,7 +711,8 @@ mod tests {
     #[test]
     fn file_names_and_summaries() {
         let mut report = build(ReportInput {
-            probe_version: "0.1.0",
+            tool: "knurl-probe 0.1.0",
+            date: "2026-11-18",
             os: "Windows",
             windows_name: "Alex's phones",
             services: Services {

@@ -1,14 +1,16 @@
-//! `knurl-probe`: finds Sony headphones paired with Windows and records how they talk.
+//! `knurl-probe`: finds Sony headphones paired with Windows and records how
+//! they talk, to add new models to Knurl.
 //!
-//! It does three things, all read-only towards Windows settings:
+//! On Windows, all read-only towards Windows settings:
+//! * `run`: check one pair of headphones and write a report (JSON);
 //! * `devices`: list paired Bluetooth devices exposing a Sony MDR RFCOMM service;
-//! * `audio`:   list the Windows audio endpoints with their form factor and
+//! * `audio`: list the Windows audio endpoints with their form factor and
 //!   default roles (to tell the stereo and Hands-Free endpoints apart);
 //! * `capture`: open the MDR channel and log every byte in both directions to a
 //!   JSON-lines file, optionally sending frames typed at the prompt.
 //!
-//! Nothing here interprets opcodes: the capture files are the ground truth the
-//! real protocol layer will be built and tested against.
+//! On any system, with files only (`files`): `known`, `check`, `draft`,
+//! `validate` for the model descriptions in `headphones/`.
 
 #[cfg(windows)]
 mod audio;
@@ -16,6 +18,7 @@ mod audio;
 mod bluetooth;
 #[cfg(windows)]
 mod capture;
+mod files;
 #[cfg(windows)]
 mod report;
 // The capture log is written only by `capture`.
@@ -70,13 +73,44 @@ enum Command {
     },
     /// Check one pair of headphones read-only and write a report to attach to
     /// a "New headphone model" issue (no Bluetooth address, no personal names).
-    Report {
+    Run {
         /// Part of the device name; needed only when several are paired.
         #[arg(long)]
         device: Option<String>,
         /// Folder for the report. Default: reports/
         #[arg(long)]
         out: Option<std::path::PathBuf>,
+    },
+    /// List the headphone descriptions that ship with the probe.
+    Known,
+    /// Compare a report with a description. Exit code 1 when they differ.
+    Check {
+        /// The report (JSON) written by `run`.
+        report: std::path::PathBuf,
+        /// A description file. Default: the shipped description of the
+        /// report's model.
+        #[arg(long)]
+        against: Option<std::path::PathBuf>,
+    },
+    /// Draft a description of a new model from a report, to review by hand.
+    Draft {
+        /// The report (JSON) written by `run`.
+        report: std::path::PathBuf,
+        /// File name without .toml: lowercase letters, digits, dashes,
+        /// e.g. sony-wh-1000xm6.
+        #[arg(long)]
+        id: String,
+        /// Name for people, e.g. "Sony WH-1000XM6".
+        #[arg(long)]
+        name: String,
+        /// Write the description here. Default: print it.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    /// Check description files. Exit code 1 when one is wrong.
+    Validate {
+        #[arg(required = true)]
+        files: Vec<std::path::PathBuf>,
     },
     /// Connect to the headphones and record the MDR traffic.
     Capture {
@@ -104,6 +138,25 @@ enum Command {
 
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
+    // The file commands run on any system.
+    let files = match &cli.command {
+        Command::Known => Some(Ok(files::known_models())),
+        Command::Check { report, against } => Some(files::check(report, against.as_deref())),
+        Command::Draft {
+            report,
+            id,
+            name,
+            out,
+        } => Some(files::draft_file(report, id, name, out.as_ref())),
+        Command::Validate { files } => Some(Ok(files::validate(files))),
+        _ => None,
+    };
+    if let Some(result) = files {
+        return result.unwrap_or_else(|e| {
+            eprintln!("error: {e}");
+            std::process::ExitCode::FAILURE
+        });
+    }
     match run(cli) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
@@ -137,7 +190,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::Audio { all } => audio::print_endpoints(all),
-        Command::Report { device, out } => report::run(report::Options {
+        Command::Run { device, out } => report::run(report::Options {
             device,
             out_dir: out,
         }),
@@ -156,6 +209,12 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             send_on_connect,
             guided,
         }),
+        Command::Known
+        | Command::Check { .. }
+        | Command::Draft { .. }
+        | Command::Validate { .. } => {
+            unreachable!("file commands are handled in main")
+        }
     }
 }
 
@@ -188,7 +247,7 @@ fn rfcomm_check(name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(not(windows))]
 fn run(_cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    Err("knurl-probe only runs on Windows".into())
+    Err("this command needs Windows; known, check, draft and validate run anywhere".into())
 }
 
 /// Parses "00 0a FF" / "000aff" / "0x00,0x0a" into bytes.

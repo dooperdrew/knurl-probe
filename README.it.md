@@ -16,16 +16,33 @@ Qui c'è anche il codice che Knurl usa per parlare con le cuffie: il protocollo 
 - il secondo servizio Sony (MDR v2), che secondo le fonti pubbliche usano i modelli più recenti: il probe lo apre, ma ancora niente lo decodifica.
 
 ## Cosa fa
-Nessun comando cambia le impostazioni di Windows. `rfcomm-check` non manda dati; `watch` e `report` mandano solo richieste di lettura. `capture` conferma (ACK) quello che mandano le cuffie, e manda altro solo se lo chiedi tu: i frame passati con `--send-on-connect` o scritti al suo prompt (`send <hex>`, `raw <hex>`).
+Nessun comando cambia le impostazioni di Windows. `rfcomm-check` non manda dati; `watch` e `run` mandano solo richieste di lettura. `capture` conferma (ACK) quello che mandano le cuffie, e manda altro solo se lo chiedi tu: i frame passati con `--send-on-connect` o scritti al suo prompt (`send <hex>`, `raw <hex>`).
 
 | Comando | Cosa fa |
 |---|---|
 | `devices` | Elenca i dispositivi accoppiati con un servizio Sony MDR (`--all-services` elenca anche tutti i loro servizi RFCOMM) |
 | `rfcomm-check --device <nome>` | Apre ogni servizio MDR e lo richiude; non manda dati |
-| `report` | Controlla le cuffie in sola lettura (modello, firmware, protocollo, funzioni dichiarate, batteria e impostazioni su MDR v1; su MDR v2 solo la domanda sul protocollo) e scrive un report senza indirizzo Bluetooth né nomi personali, da allegare a una issue "New headphone model" (`--device` se ce n'è più di una) |
+| `run` | Controlla le cuffie in sola lettura (modello, firmware, protocollo, funzioni dichiarate, batteria e impostazioni su MDR v1; su MDR v2 solo la domanda sul protocollo) e scrive un report senza indirizzo Bluetooth né nomi personali, da allegare a una issue "New headphone model" (`--device` se ce n'è più di una) |
 | `capture --device <nome>` | Si collega e registra ogni byte nei due sensi in un file JSON-lines (`--guided` ti guida in una sessione di prova) |
 | `watch` | Avvia lo stesso thread di collegamento dell'app Knurl e stampa cosa riporta (solo WH-1000XM3 e WH-1000XM4) |
 | `audio` | Elenca i dispositivi audio di Windows, per distinguere quello stereo delle cuffie da quello per le chiamate (Hands-Free) |
+
+Questi funzionano su qualsiasi sistema e lavorano solo sui file:
+
+| Comando | Cosa fa |
+|---|---|
+| `known` | Elenca le descrizioni dei modelli incluse nel probe (`headphones/`) e quanto è verificata ciascuna |
+| `check REPORT [--against FILE]` | Confronta un report con una descrizione; codice di uscita 1 se differiscono |
+| `draft REPORT --id ID --name NOME [--out FILE]` | Prepara la bozza della descrizione di un modello nuovo a partire da un report |
+| `validate FILE...` | Controlla i file di descrizione; codice di uscita 1 se uno è sbagliato |
+
+## Modelli
+Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su cui risponde, la versione del protocollo, il firmware e i codici delle funzioni che dichiara, e quanto tutto questo è verificato (`unverified`, `reported` da un report, `verified` da due o più). Formati: [docs/format.md](docs/format.md) (in inglese). Per aggiungere un modello: [docs/contributing-headphones.md](docs/contributing-headphones.md) (in inglese).
+
+| Modello | Stato | Su cosa si basa |
+|---|---|---|
+| WH-1000XM3 | reported | la cattura del 2026-11-07, riprodotta in un test che verifica che report e descrizione coincidano |
+| WH-1000XM4 | unverified | solo fonti pubbliche |
 
 **Privacy:** una cattura grezza contiene l'indirizzo Bluetooth delle cuffie. Finisce in `captures/raw/`, che git ignora; in questo repository entrano solo i frame, senza l'indirizzo.
 

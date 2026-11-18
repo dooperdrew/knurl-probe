@@ -1,0 +1,17 @@
+# Sony WH-1000XM3.
+# Facts from one knurl-probe report: the guided capture of 2026-11-07
+# (firmware 4.5.2, Windows 10), replayed in crates/knurl-report/tests.
+format = 1
+id = "sony-wh-1000xm3"
+name = "Sony WH-1000XM3"
+model = "WH-1000XM3"
+service = "mdr-v1"
+protocol_version = 0x4010
+firmware = ["4.5.2"]
+functions = [0x11, 0xC1, 0x12, 0x13, 0x14, 0x30, 0x71, 0x62, 0x81, 0x42, 0x41, 0x51, 0xA1, 0xE1, 0xE2, 0xD1, 0xD2, 0xF4, 0x39]
+
+[verification]
+status = "reported"
+reports = 1
+last = "2026-11-07"
+source = "knurl-probe capture of 2026-11-07 (docs/04-risultati-xm3.md)"
