@@ -177,6 +177,10 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/hosted-jobs-guarded.mjs"
 
+      - name: local HTTP servers check the Host header
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/local-server-host.mjs"
+
       - name: managed files change only in the bedrock sync PR
         shell: bash
         env:

@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.20.2, stacks: rust)
+## bedrock rules (kit 0.20.3, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -41,6 +41,7 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **design-reference**: A project with a UI declares its design reference (identity, tokens with measured contrast, components, screens, decisions) as design in .bedrock.yml and updates it in the same PR as a UI change; any session may review it. CI checks that the declared file exists; declaring it and the same-PR update are checked in review. _(CI: design reference exists)_
 - **docs-index-current**: Once a repo sets docs modules in .bedrock.yml, every doc under docs/ has front matter with title, summary and type, and docs/README.md is the generated, up-to-date index with its map (skill bedrock-docs). _(CI: docs index is up to date)_
 - **docs-links-resolve**: Relative links and images in tracked Markdown resolve to files inside the repo (a link that only works on one PC breaks on GitHub). _(CI: Markdown links resolve)_
+- **local-server-checks-host**: A local HTTP server (createServer and listen) answers only when the Host header is an IP literal, localhost or a configured name, so a DNS-rebinding page cannot read it. _(CI: local HTTP servers check the Host header)_
 - **no-fake-success**: A failure is reported as a failure. No hardcoded PASS, no mock data or mock calls in release builds, no "ok" after an error. _(review until 2027-02-04)_
 - **node-test-no-bare-folder**: node --test gets no argument, test file paths or a quoted glob, never a bare folder: since Node 21 a folder is not searched and the tests silently stop running. _(CI: node --test gets files or globs, not folders)_
 - **outputs-verified**: A packaging or release step verifies what it produced (format, contents, checksum) and CI runs it; a file name or exit code 0 is not proof. _(review until 2027-02-07)_
