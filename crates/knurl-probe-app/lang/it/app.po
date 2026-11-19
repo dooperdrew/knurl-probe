@@ -1,0 +1,125 @@
+# Knurl Probe: texts written in Rust (the t! macro, src/i18n.rs), in Italian.
+# Read into the exe at build time. msgid is the English text in the code;
+# keep every {name} as it is. src/i18n.rs tests fail when a text used in
+# the code is missing here or a translation loses a {name}.
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Asking for the model, firmware and features"
+msgstr "Chiedo modello, firmware e funzioni"
+
+msgid "Battery"
+msgstr "Batteria"
+
+msgid "Check that the headphones are on and connected to this PC, then check again."
+msgstr "Controlla che le cuffie siano accese e collegate a questo PC, poi controlla di nuovo."
+
+msgid "Control service"
+msgstr "Servizio di controllo"
+
+msgid "Features declared"
+msgstr "Funzioni dichiarate"
+
+msgid "Firmware"
+msgstr "Firmware"
+
+msgid "Knurl already supports your {model}"
+msgstr "Knurl supporta già le tue {model}"
+
+msgid "Knurl does not know the {model} yet. Send the report and it can be added."
+msgstr "Knurl non conosce ancora le {model}. Invia il report e potranno essere aggiunte."
+
+msgid "Listening on the newer Sony service"
+msgstr "Ascolto sul servizio Sony più recente"
+
+msgid "MDR v1 and MDR v2"
+msgstr "MDR v1 e MDR v2"
+
+msgid "MDR v2 (newer)"
+msgstr "MDR v2 (più recente)"
+
+msgid "Model"
+msgstr "Modello"
+
+msgid "New model: thank you"
+msgstr "Modello nuovo: grazie"
+
+msgid "Nothing could be read"
+msgstr "Non è stato possibile leggere niente"
+
+msgid "Opening the control channel"
+msgstr "Apro il canale di controllo"
+
+msgid "Protocol"
+msgstr "Protocollo"
+
+msgid "Putting the report together"
+msgstr "Preparo il report"
+
+msgid "Sending the report still helps: it confirms the model with your firmware."
+msgstr "Inviare il report aiuta comunque: conferma il modello con il tuo firmware."
+
+msgid "They answered on MDR v2, which Knurl cannot read yet. The report recorded what they sent: sending it helps to add them."
+msgstr "Hanno risposto su MDR v2, che Knurl non sa ancora leggere. Il report ha registrato cosa hanno mandato: inviarlo aiuta ad aggiungerle."
+
+msgid "Windows did not give the Documents folder: {e}"
+msgstr "Windows non ha indicato la cartella Documenti: {e}"
+
+msgid "Your headphones use the newer Sony service"
+msgstr "Le tue cuffie usano il servizio Sony più recente"
+
+msgid "could not create {path}: {e}"
+msgstr "impossibile creare {path}: {e}"
+
+msgid "could not write {path}: {e}"
+msgstr "impossibile scrivere {path}: {e}"
+
+msgid "headphones"
+msgstr "cuffie"
+
+msgid "reports to Knurl Probe are switched off for now"
+msgstr "per ora i report a Knurl Probe sono disattivati"
+
+msgid "the Documents folder name is not valid: {e}"
+msgstr "il nome della cartella Documenti non è valido: {e}"
+
+msgid "the report is too large for the server"
+msgstr "il report è troppo grande per il server"
+
+msgid "the report is {length} characters, more than the {limit} the server takes: save it to a file and attach it to an issue instead"
+msgstr "il report è di {length} caratteri, più dei {limit} che il server accetta: salvalo in un file e allegalo a una issue"
+
+msgid "the server answered HTTP {status}"
+msgstr "il server ha risposto HTTP {status}"
+
+msgid "the server answered HTTP {status} ({reason})"
+msgstr "il server ha risposto HTTP {status} ({reason})"
+
+msgid "the server answered {status} without an issue number: it is unclear whether the report arrived"
+msgstr "il server ha risposto {status} senza il numero della issue: non è chiaro se il report sia arrivato"
+
+msgid "the server could not be reached: {reason}"
+msgstr "il server non è raggiungibile: {reason}"
+
+msgid "the server could not reach GitHub: try again later"
+msgstr "il server non ha raggiunto GitHub: riprova più tardi"
+
+msgid "the server does not accept reports from Knurl Probe yet"
+msgstr "il server non accetta ancora report da Knurl Probe"
+
+msgid "the server does not know this app's key"
+msgstr "il server non riconosce la chiave di questa app"
+
+msgid "the server refused the report ({reason})"
+msgstr "il server ha rifiutato il report ({reason})"
+
+msgid "there is no report to save"
+msgstr "non c'è nessun report da salvare"
+
+msgid "there is no report to send"
+msgstr "non c'è nessun report da inviare"
+
+msgid "too many reports were sent in the last hour: try again later"
+msgstr "nell'ultima ora sono stati inviati troppi report: riprova più tardi"

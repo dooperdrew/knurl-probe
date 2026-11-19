@@ -59,7 +59,7 @@ Each model has a description in [`headphones/`](headphones): the service it answ
 cargo run --release -p knurl-probe-app
 ```
 
-**Not verified yet:** the app has not run on Windows or on headphones; its screens were checked only as images rendered on Linux by `cargo run -p knurl-probe-app --example snapshot -- <folder>`, with sample values. It is not in a release yet, and its texts are in English only.
+**Not verified yet:** the app has not run on Windows or on headphones; its screens were checked only as images rendered on Linux by `cargo run -p knurl-probe-app --example snapshot -- <folder>`, with sample values. It is not in a release yet. It speaks English, Italian and Spanish (Windows' language by default, a choice on the first screen); the translations were not read by a native speaker.
 
 ## Run it from source
 You need Windows 10 or 11, the headphones paired as a classic Bluetooth device (the entry without `LE_`), and Rust (the exact version is pinned in `rust-toolchain.toml`; rustup installs it).

@@ -10,6 +10,7 @@
 use knurl_report::Report;
 use serde::Deserialize;
 
+use crate::t;
 use crate::view::model_name;
 
 /// Where reports go and the project's public key (public by design: it can
@@ -104,8 +105,9 @@ pub fn interpret(status: u16, body: &str) -> Outcome {
     if status == 202 {
         return match serde_json::from_str::<Accepted>(body) {
             Ok(a) => Outcome::Sent { issue: a.issue },
-            Err(_) => Outcome::NotSent(format!(
-                "the server answered {status} without an issue number: it is unclear whether the report arrived"
+            Err(_) => Outcome::NotSent(t!(
+                "the server answered {status} without an issue number: it is unclear whether the report arrived",
+                status = status
             )),
         };
     }
@@ -114,17 +116,20 @@ pub fn interpret(status: u16, body: &str) -> Outcome {
         .unwrap_or_default();
     let reason = match (status, error.as_str()) {
         (400, e) if e.starts_with("kind must be") => {
-            "the server does not accept reports from Knurl Probe yet".to_string()
+            t!("the server does not accept reports from Knurl Probe yet").to_string()
         }
-        (400, e) => format!("the server refused the report ({e})"),
-        (401, _) => "the server does not know this app's key".to_string(),
-        (403, "disabled") => "reports to Knurl Probe are switched off for now".to_string(),
-        (403, e) => format!("the server refused the report ({e})"),
-        (413, _) => "the report is too large for the server".to_string(),
-        (429, _) => "too many reports were sent in the last hour: try again later".to_string(),
-        (502, _) => "the server could not reach GitHub: try again later".to_string(),
-        (s, "") => format!("the server answered HTTP {s}"),
-        (s, e) => format!("the server answered HTTP {s} ({e})"),
+        (403, "disabled") => t!("reports to Knurl Probe are switched off for now").to_string(),
+        (400 | 403, e) => t!("the server refused the report ({reason})", reason = e),
+        (401, _) => t!("the server does not know this app's key").to_string(),
+        (413, _) => t!("the report is too large for the server").to_string(),
+        (429, _) => t!("too many reports were sent in the last hour: try again later").to_string(),
+        (502, _) => t!("the server could not reach GitHub: try again later").to_string(),
+        (s, "") => t!("the server answered HTTP {status}", status = s),
+        (s, e) => t!(
+            "the server answered HTTP {status} ({reason})",
+            status = s,
+            reason = e
+        ),
     };
     Outcome::NotSent(reason)
 }
@@ -139,14 +144,19 @@ pub fn send(
     let body = match request_body(report, version) {
         Ok(body) => body,
         Err(NotSendable::TooLong { length }) => {
-            return Outcome::NotSent(format!(
-                "the report is {length} characters, more than the {MAX_ATTACHMENT} the server takes: save it to a file and attach it to an issue instead"
+            return Outcome::NotSent(t!(
+                "the report is {length} characters, more than the {limit} the server takes: save it to a file and attach it to an issue instead",
+                length = length,
+                limit = MAX_ATTACHMENT
             ));
         }
     };
     match transport.post(&config.endpoint, &config.key, &body) {
         Ok((status, answer)) => interpret(status, &answer),
-        Err(reason) => Outcome::NotSent(format!("the server could not be reached: {reason}")),
+        Err(reason) => Outcome::NotSent(t!(
+            "the server could not be reached: {reason}",
+            reason = reason
+        )),
     }
 }
 

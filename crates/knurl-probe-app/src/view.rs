@@ -7,6 +7,7 @@ use slint::{ModelRc, SharedString, VecModel};
 
 use crate::flow::{Flow, Page, Search, Sending};
 use crate::send::{self, NotSendable};
+use crate::t;
 use crate::ui::{Fact, MainWindow, StepRow};
 
 /// The result screen in plain words.
@@ -21,71 +22,85 @@ pub struct ResultView {
     pub problems: Vec<String>,
 }
 
-/// The model's name for sentences: what the headphones answered, else the
-/// Windows name when it is a Sony model name, else "headphones".
-pub fn model_name(report: &Report) -> String {
+/// The model's name: what the headphones answered, else the Windows name when
+/// it is a Sony model name.
+pub fn known_model(report: &Report) -> Option<String> {
     report
         .answers
         .model
         .clone()
         .or_else(|| (report.device_name != RENAMED).then(|| report.device_name.clone()))
-        .unwrap_or_else(|| "headphones".to_string())
+}
+
+/// The model's name for the relay's message, always in English (it ends up in
+/// the issue title): the model, else "headphones".
+pub fn model_name(report: &Report) -> String {
+    known_model(report).unwrap_or_else(|| "headphones".to_string())
+}
+
+/// The model's name for the screens, in the user's language.
+fn model_for_people(report: &Report) -> String {
+    known_model(report).unwrap_or_else(|| t!("headphones").to_string())
 }
 
 fn service_line(report: &Report) -> Option<String> {
     let opened = |s: &ServiceResult| *s == ServiceResult::Opened;
     match (opened(&report.services.v1), opened(&report.services.v2)) {
-        (true, true) => Some("MDR v1 and MDR v2".into()),
+        (true, true) => Some(t!("MDR v1 and MDR v2").to_string()),
         (true, false) => Some("MDR v1".into()),
-        (false, true) => Some("MDR v2 (newer)".into()),
+        (false, true) => Some(t!("MDR v2 (newer)").to_string()),
         (false, false) => None,
     }
 }
 
 pub fn result_view(report: &Report) -> ResultView {
-    let model = model_name(report);
+    let model = model_for_people(report);
     let (kind, title, text) = match report.verdict {
         Verdict::Supported => (
             0,
-            format!("Knurl already supports your {model}"),
-            "Sending the report still helps: it confirms the model with your firmware.".to_string(),
+            t!("Knurl already supports your {model}", model = model),
+            t!("Sending the report still helps: it confirms the model with your firmware.")
+                .to_string(),
         ),
         Verdict::NewModel => (
             1,
-            "New model: thank you".to_string(),
-            format!("Knurl does not know the {model} yet. Send the report and it can be added."),
+            t!("New model: thank you").to_string(),
+            t!(
+                "Knurl does not know the {model} yet. Send the report and it can be added.",
+                model = model
+            ),
         ),
         Verdict::NotDecoded => (
             2,
-            "Your headphones use the newer Sony service".to_string(),
-            "They answered on MDR v2, which Knurl cannot read yet. The report recorded what they sent: sending it helps to add them.".to_string(),
+            t!("Your headphones use the newer Sony service").to_string(),
+            t!("They answered on MDR v2, which Knurl cannot read yet. The report recorded what they sent: sending it helps to add them.").to_string(),
         ),
         Verdict::NothingRead => (
             3,
-            "Nothing could be read".to_string(),
-            "Check that the headphones are on and connected to this PC, then check again."
+            t!("Nothing could be read").to_string(),
+            t!("Check that the headphones are on and connected to this PC, then check again.")
                 .to_string(),
         ),
     };
     let a = &report.answers;
     let mut facts = Vec::new();
     if let Some(m) = &a.model {
-        facts.push(("Model".into(), m.clone()));
+        facts.push((t!("Model").to_string(), m.clone()));
     }
     if let Some(f) = &a.firmware {
-        facts.push(("Firmware".into(), f.clone()));
+        facts.push((t!("Firmware").to_string(), f.clone()));
     }
     if let Some(p) = &a.protocol_version {
-        facts.push(("Protocol".into(), p.clone()));
+        facts.push((t!("Protocol").to_string(), p.clone()));
     }
     if let Some(list) = &a.functions {
-        facts.push(("Features declared".into(), list.len().to_string()));
+        facts.push((t!("Features declared").to_string(), list.len().to_string()));
     }
     if let Some(b) = a.battery_percent {
-        facts.push(("Battery".into(), format!("{b} %")));
+        facts.push((t!("Battery").to_string(), format!("{b} %")));
     }
     if let Some(s) = service_line(report) {
-        facts.push(("Control service".into(), s));
+        facts.push((t!("Control service").to_string(), s));
     }
     ResultView {
         kind,
@@ -96,27 +111,34 @@ pub fn result_view(report: &Report) -> ResultView {
     }
 }
 
-/// The step labels, in order.
-const STEPS: [(CheckStep, &str); 4] = [
-    (CheckStep::Opening, "Opening the control channel"),
-    (
-        CheckStep::Asking,
-        "Asking for the model, firmware and features",
-    ),
-    (CheckStep::Listening, "Listening on the newer Sony service"),
-    (CheckStep::Finishing, "Putting the report together"),
+/// The steps, in order.
+const STEPS: [CheckStep; 4] = [
+    CheckStep::Opening,
+    CheckStep::Asking,
+    CheckStep::Listening,
+    CheckStep::Finishing,
 ];
+
+/// A step's label in the user's language.
+fn step_label(step: CheckStep) -> &'static str {
+    match step {
+        CheckStep::Opening => t!("Opening the control channel"),
+        CheckStep::Asking => t!("Asking for the model, firmware and features"),
+        CheckStep::Listening => t!("Listening on the newer Sony service"),
+        CheckStep::Finishing => t!("Putting the report together"),
+    }
+}
 
 /// Each step's label and state: 0 waiting, 1 running, 2 done, 3 not offered
 /// (skipped: a later step has started).
 pub fn step_rows(started: &[CheckStep]) -> Vec<(&'static str, i32)> {
     let last = started.last().copied();
-    let position = |s: CheckStep| STEPS.iter().position(|(x, _)| *x == s);
+    let position = |s: CheckStep| STEPS.iter().position(|x| *x == s);
     let last_pos = last.and_then(position);
     STEPS
         .iter()
         .enumerate()
-        .map(|(i, (step, label))| {
+        .map(|(i, step)| {
             let state = if Some(*step) == last {
                 1
             } else if started.contains(step) {
@@ -126,7 +148,7 @@ pub fn step_rows(started: &[CheckStep]) -> Vec<(&'static str, i32)> {
             } else {
                 0
             };
-            (*label, state)
+            (step_label(*step), state)
         })
         .collect()
 }

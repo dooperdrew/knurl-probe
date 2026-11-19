@@ -50,13 +50,13 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 ## 4. Screens
 | Screen | What it shows | Rendered by the example as |
 |---|---|---|
-| 1. Welcome | what the app does; what the report holds and never holds; Start; the Slint badge and the version | `01-welcome` |
+| 1. Welcome | what the app does; what the report holds and never holds; Start; the language (Same as Windows, English, Italiano, Español); the Slint badge and the version | `01-welcome` |
 | 2. Choose your headphones | searching (progress bar); the paired Sony headphones, each with Check; none found (how to pair, Search again, Open Bluetooth settings); the lookup failed (Windows' reason) | `02` to `05` |
 | 3. Checking | the four steps: opening the channel, asking model/firmware/features, listening on the newer service, putting the report together; a step the headphones do not offer is marked "not offered" | `06-checking` |
 | 4. Result | in plain words: already supported, new model, newer service (not decoded), nothing read; "What was read"; problems as error notices; Next, Check again | `07` to `10` |
-| 5. Send | Send (primary), Save to a file (Documents\Knurl Probe), See what will be sent (the exact request that leaves the PC), the GitHub issue form; Sending… (Send and Back disabled); Sent with the issue link and Open the issue; Not sent with the reason and Try again; Saved with Show in folder, or the reason it was not saved; a report over the relay's limit can only be saved | `11` to `16` |
+| 5. Send | Send (primary) and Save to a file (Documents\Knurl Probe) as buttons; See what will be sent (the exact request that leaves the PC) and the GitHub issue form as links; Sending… (Send and Back disabled); Sent with the issue link and Open the issue; Not sent with the reason and Try again; Saved with Show in folder, or the reason it was not saved; a report over the relay's limit can only be saved | `11` to `16` |
 
-`cargo run -p knurl-probe-app --example snapshot -- <folder>` renders the 16 states in light and dark (32 PNGs) with Slint's software renderer and **sample** values. The images are not committed (they are regenerated, and on Linux the fonts differ from Segoe UI).
+`cargo run -p knurl-probe-app --example snapshot -- <folder>` renders the 16 states in English light and dark, and in Italian and Spanish light (64 PNGs, suffix `-it`, `-es`), with Slint's software renderer and **sample** values. The images are not committed (they are regenerated, and on Linux the fonts differ from Segoe UI).
 
 ## 5. Decisions
 - **2026-11-18, the Knurl family, copied.** The owner chose the Knurl look for the probe (DooperDrew/knurl-probe#2). Tokens and components are copied rather than shared through a crate: the two repositories are separate (one private, one public) and the probe needs only a few components.
@@ -66,14 +66,17 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 - **2026-11-18, the Slint badge on the first screen.** The Slint Royalty-free licence 2.0 asks for the AboutSlint widget in an About or splash screen; the welcome screen is the app's first screen, so the badge sits in its footer, small, as in Knurl's About window.
 - **2026-11-18, the Windows name on the Choose screen only.** The list shows the name Windows gives the headphones, which may be one the user chose; it stays on the PC. The report keeps it only if it is a Sony model name (`knurl-report`).
 
+- **2026-11-19, English, Italian and Spanish, as Knurl.** The same system as the Knurl app: Rust texts through `t!` with `lang/<code>/app.po`, the window's texts through `@tr` with `lang/<code>/LC_MESSAGES/knurl-probe-app.po` bundled in the exe; shared terms worded as in Knurl (Indietro/Atrás, Invia/Enviar, Come Windows/Como Windows, Apri le impostazioni Bluetooth). The choice is on the welcome screen, "Same as Windows" first; the language names are never translated, so a person finds theirs. It is not saved: the app is used once and starts in Windows' language. The report and the relay's message stay in English (they are read by developers on GitHub); "a report" is "il report" and "el informe".
+- **2026-11-19, See what will be sent as a link.** Three buttons did not fit in one row in Spanish while sending ("Enviando..."): Send and Save stay buttons, the data toggle becomes a link like the issue form's. The "What was read" labels column is 150 px, for "Funciones declaradas".
+
 ## 6. Verified and not verified
 **Verified**
 - `python design/contrast.py`: 60 pairs, light and dark, none under its minimum.
-- `cargo test -p knurl-probe-app`: theme equals tokens, no colour outside the theme, the flow between the screens (send once, try again after a failure, never twice after success), the plain-words result, the step states, the request body (exactly what is shown), the too-long refusal, every relay answer read as sent or not sent.
-- The images of the snapshot example, looked at one by one on 2026-11-18, and the send states (11 to 16) on 2026-11-19 (rendered on Linux, with a fallback font instead of Segoe UI and Consolas).
+- `cargo test -p knurl-probe-app`: theme equals tokens, no colour outside the theme, the flow between the screens (send once, try again after a failure, never twice after success), the plain-words result, the step states, the request body (exactly what is shown), the too-long refusal, every relay answer read as sent or not sent; every text of the code and of the window has an Italian and a Spanish translation that keeps its values, the same text has one translation in both catalogues, the language choice.
+- The images of the snapshot example, looked at one by one on 2026-11-18, the send states (11 to 16) on 2026-11-19, and every screen in Italian and Spanish on 2026-11-19 (no text cut or out of the window) (rendered on Linux, with a fallback font instead of Segoe UI and Consolas).
 
 **Not verified**
 - The app on Windows: the real window, Segoe UI, scaling at 125-200 %, keyboard and screen reader use.
 - The check from the app on real headphones (the same code as `knurl-probe run`, itself not yet run on headphones since the move).
 - Sending for real: the relay accepts `data` reports only after its deploy (bedrock-relay#7); until then it answers that the kind is unknown, which the app shows as "the server does not accept reports from Knurl Probe yet". The WinHTTP transport has not run on Windows.
-- The Italian and Spanish texts (a later pull request).
+- The Italian and Spanish texts read by a native speaker; the language switch on Windows (only rendered here).

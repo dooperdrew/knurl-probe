@@ -8,6 +8,7 @@
 
 use knurl_probe::CheckStep;
 use knurl_probe_app::flow::{Event, Flow};
+use knurl_probe_app::i18n::{self, Lang};
 use knurl_probe_app::ui::{MainWindow, Palette};
 use knurl_probe_app::view;
 use knurl_report::{Answers, Function, REPORT_FORMAT, Report, ServiceResult, Services, Verdict};
@@ -133,12 +134,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.show()?;
 
     let names = vec!["WH-1000XM6".to_string(), "WH-1000XM3".to_string()];
-    for (theme, scheme) in [
-        ("light", slint::language::ColorScheme::Light),
-        ("dark", slint::language::ColorScheme::Dark),
-    ] {
+    // English in light and dark; Italian and Spanish in light, to check that
+    // the longer texts fit (suffix -it, -es).
+    let runs = [
+        (Lang::En, 1, "light", slint::language::ColorScheme::Light),
+        (Lang::En, 1, "dark", slint::language::ColorScheme::Dark),
+        (Lang::It, 2, "light", slint::language::ColorScheme::Light),
+        (Lang::Es, 3, "light", slint::language::ColorScheme::Light),
+    ];
+    for (lang, choice, theme, scheme) in runs {
+        i18n::set(lang);
+        slint::select_bundled_translation(i18n::slint_code(lang)).map_err(|e| format!("{e:?}"))?;
+        ui.set_language_choice(choice);
         ui.global::<Palette>().set_color_scheme(scheme);
-        let at = |n: &str| out.join(format!("{n}-{theme}.png"));
+        let suffix = if lang == Lang::En {
+            String::new()
+        } else {
+            format!("-{}", lang.code())
+        };
+        let at = |n: &str| out.join(format!("{n}-{theme}{suffix}.png"));
 
         let mut f = Flow::default();
         shot(&ui, &window, &f, &at("01-welcome"))?;
@@ -191,9 +205,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sent.handle(Event::SendDone(Ok(42)));
         shot(&ui, &window, &sent, &at("15-send-sent"))?;
         let mut refused = sending.clone();
-        refused.handle(Event::SendDone(Err(
-            "the server does not accept reports from Knurl Probe yet".into(),
-        )));
+        // The reason the app shows for the relay's answer before its deploy,
+        // through the same code (and so in the same language) as the app.
+        let reason = match knurl_probe_app::send::interpret(
+            400,
+            r#"{"error":"kind must be one of crash, error, bug, feedback"}"#,
+        ) {
+            knurl_probe_app::send::Outcome::NotSent(reason) => reason,
+            knurl_probe_app::send::Outcome::Sent { .. } => String::new(),
+        };
+        refused.handle(Event::SendDone(Err(reason)));
         shot(&ui, &window, &refused, &at("16-send-not-sent"))?;
     }
     Ok(())

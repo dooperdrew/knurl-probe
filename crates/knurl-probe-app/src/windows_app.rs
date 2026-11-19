@@ -10,8 +10,9 @@ use std::sync::Arc;
 use knurl_probe::check::{self, Headphones};
 use knurl_probe_app::flow::{Effect, Event, Flow};
 use knurl_probe_app::ui::MainWindow;
-use knurl_probe_app::{ISSUE_FORM, send, view};
+use knurl_probe_app::{ISSUE_FORM, i18n, send, t, view};
 use slint::ComponentHandle;
+use windows::Win32::Globalization::GetUserDefaultLocaleName;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{
     FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
@@ -36,7 +37,11 @@ pub fn run() -> Result<(), slint::PlatformError> {
     // it every lookup still works, so a failure is not fatal.
     let _ = knurl_device::keep_com_apartment();
 
+    // Rust's texts before the window exists; the window's own texts once it
+    // does (Slint knows its bundled translations only then).
+    i18n::set(i18n::for_choice(0, &locale()));
     let ui = MainWindow::new()?;
+    select_window_language();
     ui.on_begin(|| dispatch(Event::Start));
     ui.on_search_again(|| dispatch(Event::SearchAgain));
     ui.on_choose(|i| {
@@ -48,6 +53,7 @@ pub fn run() -> Result<(), slint::PlatformError> {
     ui.on_to_send(|| dispatch(Event::ToSend));
     ui.on_toggle_data(|| dispatch(Event::ToggleData));
     ui.on_back(|| dispatch(Event::Back));
+    ui.on_choose_language(choose_language);
     ui.on_send(|| dispatch(Event::Send));
     ui.on_open_issue(|| {
         let issue = APP.with(|app| match app.borrow().as_ref()?.flow.sending {
@@ -80,6 +86,36 @@ pub fn run() -> Result<(), slint::PlatformError> {
         });
     });
     ui.run()
+}
+
+/// Windows' display language, e.g. `it-IT` (empty if Windows does not say).
+fn locale() -> String {
+    let mut name = [0u16; 85];
+    // SAFETY: the buffer is valid for its whole length, which is passed.
+    let len = unsafe { GetUserDefaultLocaleName(&mut name) };
+    usize::try_from(len)
+        .ok()
+        .filter(|&n| n > 0)
+        .map(|n| String::from_utf16_lossy(&name[..n - 1]))
+        .unwrap_or_default()
+}
+
+/// Switches the windows' own texts to the current language. A failure leaves
+/// them in English; Rust's texts follow anyway.
+fn select_window_language() {
+    let _ = slint::select_bundled_translation(i18n::slint_code(i18n::current()));
+}
+
+/// A language picked on the welcome screen: Rust's texts and the window's.
+fn choose_language(choice: i32) {
+    i18n::set(i18n::for_choice(choice, &locale()));
+    select_window_language();
+    APP.with(|app| {
+        if let Some(app) = app.borrow_mut().as_mut() {
+            app.ui.set_language_choice(choice);
+            view::apply(&app.ui, &app.flow);
+        }
+    });
 }
 
 /// Applies an event on the window's thread, redraws, and starts the work it
@@ -140,7 +176,9 @@ fn spawn_check(index: usize) {
 fn spawn_send() {
     let report = APP.with(|app| app.borrow().as_ref()?.flow.report.clone());
     let Some(report) = report else {
-        dispatch(Event::SendDone(Err("there is no report to send".into())));
+        dispatch(Event::SendDone(
+            Err(t!("there is no report to send").into()),
+        ));
         return;
     };
     std::thread::spawn(move || {
@@ -166,26 +204,31 @@ fn documents() -> Result<PathBuf, String> {
     // SAFETY: a known folder id and no token; on success the returned string
     // is ours and is freed with CoTaskMemFree below, after it is copied.
     let pwstr = unsafe { SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None) }
-        .map_err(|e| format!("Windows did not give the Documents folder: {e}"))?;
+        .map_err(|e| t!("Windows did not give the Documents folder: {e}", e = e))?;
     // SAFETY: SHGetKnownFolderPath returned a valid NUL-terminated string.
     let path = unsafe { pwstr.to_string() };
     // SAFETY: the string came from SHGetKnownFolderPath and is freed once.
     unsafe { CoTaskMemFree(Some(pwstr.0.cast())) };
     path.map(PathBuf::from)
-        .map_err(|e| format!("the Documents folder name is not valid: {e}"))
+        .map_err(|e| t!("the Documents folder name is not valid: {e}", e = e))
 }
 
 /// Writes the report to Documents\Knurl Probe\ and returns the file's path.
 fn save_report() -> Result<String, String> {
     let report = APP
         .with(|app| app.borrow().as_ref()?.flow.report.clone())
-        .ok_or("there is no report to save")?;
+        .ok_or_else(|| t!("there is no report to save").to_string())?;
     let folder = documents()?.join("Knurl Probe");
-    std::fs::create_dir_all(&folder)
-        .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
+    std::fs::create_dir_all(&folder).map_err(|e| {
+        t!(
+            "could not create {path}: {e}",
+            path = folder.display(),
+            e = e
+        )
+    })?;
     let path = folder.join(knurl_report::file_name(&report, check::now_secs()));
     std::fs::write(&path, report.to_json())
-        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+        .map_err(|e| t!("could not write {path}: {e}", path = path.display(), e = e))?;
     Ok(path.display().to_string())
 }
 

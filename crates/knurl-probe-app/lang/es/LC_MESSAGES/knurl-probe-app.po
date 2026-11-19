@@ -1,0 +1,271 @@
+# Knurl Probe: texts of the window (crates/knurl-probe-app/ui/*.slint, @tr), in Spanish.
+# Bundled into the exe by build.rs. Refresh the list of texts with
+# slint-tr-extractor (msgctxt is the component name); src/i18n.rs tests fail
+# when a text of the .slint files has no translation here.
+msgid ""
+msgstr ""
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: ui/app.slint:87 ui/app.slint:154
+msgctxt "MainWindow"
+msgid "Knurl Probe"
+msgstr "Knurl Probe"
+
+#: ui/app.slint:162
+msgctxt "MainWindow"
+msgid "Back"
+msgstr "Atrás"
+
+#: ui/app.slint:172
+msgctxt "MainWindow"
+msgid "Help Knurl learn your headphones"
+msgstr "Ayuda a Knurl a conocer tus auriculares"
+
+#: ui/app.slint:173
+msgctxt "MainWindow"
+msgid "Knurl Probe asks your Sony headphones a few read-only questions and prepares a short report, so Knurl can support your model. Nothing on the headphones changes."
+msgstr "Knurl Probe hace a tus auriculares Sony unas preguntas de solo lectura y prepara un informe breve, para que Knurl pueda ser compatible con tu modelo. En los auriculares no cambia nada."
+
+#: ui/app.slint:179
+msgctxt "MainWindow"
+msgid "The report holds"
+msgstr "El informe contiene"
+
+#: ui/app.slint:180
+msgctxt "MainWindow"
+msgid "the model, the firmware and the features the headphones declare"
+msgstr "el modelo, el firmware y las funciones que declaran los auriculares"
+
+#: ui/app.slint:181
+msgctxt "MainWindow"
+msgid "the bytes they exchanged with this PC during the check"
+msgstr "los bytes que intercambiaron con este PC durante la comprobación"
+
+#: ui/app.slint:182
+msgctxt "MainWindow"
+msgid "the Windows version"
+msgstr "la versión de Windows"
+
+#: ui/app.slint:183
+msgctxt "MainWindow"
+msgid "It never holds"
+msgstr "Nunca contiene"
+
+#: ui/app.slint:184
+msgctxt "MainWindow"
+msgid "the Bluetooth address of your headphones"
+msgstr "la dirección Bluetooth de tus auriculares"
+
+#: ui/app.slint:185
+msgctxt "MainWindow"
+msgid "the name of this PC or your user name"
+msgstr "el nombre de este PC ni tu nombre de usuario"
+
+#: ui/app.slint:186
+msgctxt "MainWindow"
+msgid "a name you gave your headphones"
+msgstr "un nombre que hayas dado a tus auriculares"
+
+#: ui/app.slint:192
+msgctxt "MainWindow"
+msgid "Start"
+msgstr "Empezar"
+
+#: ui/app.slint:203
+msgctxt "MainWindow"
+msgid "Language:"
+msgstr "Idioma (Language):"
+
+#: ui/app.slint:204
+msgctxt "MainWindow"
+msgid "Same as Windows"
+msgstr "Como Windows"
+
+#: ui/app.slint:219
+msgctxt "MainWindow"
+msgid "Built with:"
+msgstr "Hecho con:"
+
+#: ui/app.slint:226
+msgctxt "MainWindow"
+msgid "Version {}. Not affiliated with Sony."
+msgstr "Versión {}. Sin relación con Sony."
+
+#: ui/app.slint:240
+msgctxt "MainWindow"
+msgid "Choose your headphones"
+msgstr "Elige tus auriculares"
+
+#: ui/app.slint:241
+msgctxt "MainWindow"
+msgid "Looking for Sony headphones paired with this PC. Keep them on and close by."
+msgstr "Buscando auriculares Sony emparejados con este PC. Mantenlos encendidos y cerca."
+
+#: ui/app.slint:242
+msgctxt "MainWindow"
+msgid "The Sony headphones paired with this PC. The name is the one Windows shows; it stays on this PC."
+msgstr "Los auriculares Sony emparejados con este PC. El nombre es el que muestra Windows y se queda en este PC."
+
+#: ui/app.slint:266
+msgctxt "MainWindow"
+msgid "Check"
+msgstr "Comprobar"
+
+#: ui/app.slint:275
+msgctxt "MainWindow"
+msgid "No Sony headphones found"
+msgstr "No se han encontrado auriculares Sony"
+
+#: ui/app.slint:276
+msgctxt "MainWindow"
+msgid "Turn your headphones on and pair them in the Windows Bluetooth settings (the entry without LE_), then search again."
+msgstr "Enciende los auriculares y emparéjalos en los ajustes de Bluetooth de Windows (la entrada sin LE_) y vuelve a buscar."
+
+#: ui/app.slint:280
+msgctxt "MainWindow"
+msgid "Windows could not list the Bluetooth devices"
+msgstr "Windows no ha podido mostrar los dispositivos Bluetooth"
+
+#: ui/app.slint:287
+msgctxt "MainWindow"
+msgid "Search again"
+msgstr "Buscar de nuevo"
+
+#: ui/app.slint:292
+msgctxt "MainWindow"
+msgid "Open Bluetooth settings"
+msgstr "Abrir los ajustes de Bluetooth"
+
+#: ui/app.slint:299
+msgctxt "MainWindow"
+msgid "Not in the list? Search again"
+msgstr "¿No están en la lista? Buscar de nuevo"
+
+#: ui/app.slint:311
+msgctxt "MainWindow"
+msgid "Checking your {}"
+msgstr "Comprobando tus {}"
+
+#: ui/app.slint:312
+msgctxt "MainWindow"
+msgid "This takes up to half a minute. The questions are read-only: nothing on the headphones changes."
+msgstr "Tarda como mucho medio minuto. Las preguntas son de solo lectura: en los auriculares no cambia nada."
+
+#: ui/app.slint:322
+msgctxt "MainWindow"
+msgid "{} (not offered by these headphones)"
+msgstr "{} (estos auriculares no lo ofrecen)"
+
+#: ui/app.slint:347
+msgctxt "MainWindow"
+msgid "What was read"
+msgstr "Lo que se ha leído"
+
+#: ui/app.slint:369
+msgctxt "MainWindow"
+msgid "Problem"
+msgstr "Problema"
+
+#: ui/app.slint:376
+msgctxt "MainWindow"
+msgid "Next"
+msgstr "Siguiente"
+
+#: ui/app.slint:381
+msgctxt "MainWindow"
+msgid "Check again"
+msgstr "Comprobar de nuevo"
+
+#: ui/app.slint:393
+msgctxt "MainWindow"
+msgid "Send the report"
+msgstr "Enviar el informe"
+
+#: ui/app.slint:394
+msgctxt "MainWindow"
+msgid "This report is too long to send from the app. Save it and attach it to a \"New headphone model\" issue on GitHub."
+msgstr "Este informe es demasiado largo para enviarlo desde la app. Guárdalo y adjúntalo a una issue \"New headphone model\" en GitHub."
+
+#: ui/app.slint:395
+msgctxt "MainWindow"
+msgid "Send opens an issue in the Knurl Probe repository on GitHub with this report. You need no GitHub account. See first exactly what leaves this PC."
+msgstr "Enviar abre una issue en el repositorio de Knurl Probe en GitHub con este informe. No necesitas una cuenta de GitHub. Mira antes exactamente qué sale de este PC."
+
+#: ui/app.slint:402
+msgctxt "MainWindow"
+msgid "Sending..."
+msgstr "Enviando..."
+
+#: ui/app.slint:402
+msgctxt "MainWindow"
+msgid "Send"
+msgstr "Enviar"
+
+#: ui/app.slint:408
+msgctxt "MainWindow"
+msgid "Save to a file"
+msgstr "Guardar en un archivo"
+
+#: ui/app.slint:416
+msgctxt "MainWindow"
+msgid "Hide the data"
+msgstr "Ocultar los datos"
+
+#: ui/app.slint:416
+msgctxt "MainWindow"
+msgid "See what will be sent"
+msgstr "Ver qué se enviará"
+
+#: ui/app.slint:422
+msgctxt "MainWindow"
+msgid "Sent. Thank you!"
+msgstr "Enviado. ¡Gracias!"
+
+#: ui/app.slint:423
+msgctxt "MainWindow"
+msgid "The report is now an issue on GitHub: {}"
+msgstr "El informe ahora es una issue en GitHub: {}"
+
+#: ui/app.slint:424
+msgctxt "MainWindow"
+msgid "Open the issue"
+msgstr "Abrir la issue"
+
+#: ui/app.slint:429
+msgctxt "MainWindow"
+msgid "Not sent"
+msgstr "No enviado"
+
+#: ui/app.slint:431 ui/app.slint:445
+msgctxt "MainWindow"
+msgid "Try again"
+msgstr "Reintentar"
+
+#: ui/app.slint:436
+msgctxt "MainWindow"
+msgid "Saved"
+msgstr "Guardado"
+
+#: ui/app.slint:438
+msgctxt "MainWindow"
+msgid "Show in folder"
+msgstr "Mostrar en la carpeta"
+
+#: ui/app.slint:443
+msgctxt "MainWindow"
+msgid "The report was not saved"
+msgstr "El informe no se ha guardado"
+
+#: ui/app.slint:451
+msgctxt "MainWindow"
+msgid "Open the \"New headphone model\" form on GitHub"
+msgstr "Abrir el formulario \"New headphone model\" en GitHub"
+
+#: ui/components.slint:209
+msgctxt "CloseButton"
+msgid "Dismiss"
+msgstr "Cerrar"

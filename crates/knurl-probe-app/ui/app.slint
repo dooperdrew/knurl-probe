@@ -124,6 +124,9 @@ export component MainWindow inherits Window {
 
     in property <string> version;
 
+    // The language: 0 same as Windows, 1 English, 2 Italiano, 3 Español.
+    in property <int> language-choice;
+
     callback begin();
     callback search-again();
     callback choose(int);
@@ -137,6 +140,7 @@ export component MainWindow inherits Window {
     callback show-in-folder();
     callback open-issue-form();
     callback back();
+    callback choose-language(int);
 
     VerticalLayout {
         padding: 24px;
@@ -191,6 +195,20 @@ export component MainWindow inherits Window {
                 }
             }
             Rectangle { vertical-stretch: 1; }
+            // The language: the language names are never translated, so a
+            // person finds theirs whatever the current one is.
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: start;
+                Text { text: @tr("Language:"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                for name[i] in [@tr("Same as Windows"), "English", "Italiano", "Español"]: LinkText {
+                    text: name;
+                    font-size: 12px;
+                    font-weight: root.language-choice == i ? 700 : 400;
+                    colour: root.language-choice == i ? Theme.ink : Theme.accent-text;
+                    clicked => { root.choose-language(i); }
+                }
+            }
             // The attribution the Slint licence asks for, on the first
             // screen; small, so the app stays the subject.
             HorizontalLayout {
@@ -333,8 +351,8 @@ export component MainWindow inherits Window {
                             text: fact.label;
                             font-size: 13px;
                             color: Theme.muted;
-                            min-width: 130px;
-                            max-width: 130px;
+                            min-width: 150px;
+                            max-width: 150px;
                         }
                         Text {
                             text: fact.value;
@@ -390,7 +408,11 @@ export component MainWindow inherits Window {
                     text: @tr("Save to a file");
                     clicked => { root.save(); }
                 }
-                BrandButton {
+            }
+            // A link, not a third button: the row must fit in every language.
+            HorizontalLayout {
+                alignment: start;
+                LinkText {
                     text: root.show-data ? @tr("Hide the data") : @tr("See what will be sent");
                     clicked => { root.toggle-data(); }
                 }

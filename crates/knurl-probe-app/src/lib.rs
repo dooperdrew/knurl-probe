@@ -4,6 +4,7 @@
 //! (finding the headphones, the check, saving and sending) is in `main.rs`.
 
 pub mod flow;
+pub mod i18n;
 pub mod send;
 pub mod view;
 
