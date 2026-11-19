@@ -4,6 +4,7 @@ stacks:
   - rust
 adapters:
   - claude
+docs: [core, hardware]
 managed:
   - .claude/bedrock/cloud-skills.json
   - .claude/bedrock/install-skills.mjs
