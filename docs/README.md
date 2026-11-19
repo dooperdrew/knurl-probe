@@ -9,27 +9,45 @@ Ordine di lettura consigliato · Suggested reading order.
 ```mermaid
 flowchart LR
   design[["Design<br/>design/README.md"]]
+  subgraph explanation["Capire · Explanation"]
+    d0["Vision and scope<br/><i>Visione e perimetro</i>"]
+    d1["Architecture<br/><i>Architettura</i>"]
+  end
   subgraph how_to["Fare · How-to"]
-    d0["Adding a headphone model<br/><i>Aggiungere un modello di cuffie</i>"]
+    d2["Adding a headphone model<br/><i>Aggiungere un modello di cuffie</i>"]
+    d3["Hardware tests<br/><i>Prove sull'hardware</i>"]
   end
   subgraph reference["Consultare · Reference"]
-    d1["File formats<br/><i>Formati dei file</i>"]
-    d2["Riferimenti del protocollo MDR<br/><i>MDR protocol references</i>"]
+    d4["File formats<br/><i>Formati dei file</i>"]
+    d5["Riferimenti del protocollo MDR<br/><i>MDR protocol references</i>"]
+  end
+  subgraph decision["Decisioni · Decisions"]
+    d6["6 documenti · documents"]
   end
   subgraph record["Diario e risultati · Records and results"]
-    d3["Risultati sulla WH-1000XM3<br/><i>WH-1000XM3 results</i>"]
+    d7["Risultati sulla WH-1000XM3<br/><i>WH-1000XM3 results</i>"]
   end
+  explanation --> how_to
   how_to --> reference
-  reference --> record
+  reference --> decision
+  decision --> record
 ```
 
 **Riferimento di design · Design reference:** [design/README.md](../design/README.md)
+
+## Capire · Explanation
+
+| Documento · Document | In breve · In short | Stato · Status | Verificato · Verified |
+|---|---|---|---|
+| [Vision and scope](01-vision.md)<br/><sub>Visione e perimetro</sub> | What knurl-probe is for, who uses it, and what stays out.<br/><sub>A cosa serve knurl-probe, chi lo usa e cosa resta fuori.</sub> | attuale · current | 2026-11-19 |
+| [Architecture](03-architecture.md)<br/><sub>Architettura</sub> | How the crates fit together, what is pure and what touches Windows, and how a report travels from the headphones to an issue.<br/><sub>Come si incastrano i crate, cosa è puro e cosa tocca Windows, e come un report va dalle cuffie a una issue.</sub> | attuale · current | 2026-11-19 |
 
 ## Fare · How-to
 
 | Documento · Document | In breve · In short | Stato · Status | Verificato · Verified |
 |---|---|---|---|
 | [Adding a headphone model](contributing-headphones.md)<br/><sub>Aggiungere un modello di cuffie</sub> | How to check your Sony headphones with the probe and turn the report into a description of the model.<br/><sub>Come controllare le tue cuffie Sony con il probe e trasformare il report nella descrizione del modello.</sub> | attuale · current | 2026-11-19 |
+| [Hardware tests](05-hardware-tests.md)<br/><sub>Prove sull'hardware</sub> | What was tested on real headphones, and the checklist still to run, step by step.<br/><sub>Cosa è stato provato su cuffie vere e la lista di prove ancora da fare, passo per passo.</sub> | attuale · current | 2026-11-19 |
 
 ## Consultare · Reference
 
@@ -38,17 +56,21 @@ flowchart LR
 | [File formats](format.md)<br/><sub>Formati dei file</sub> | The report (JSON) written by `run` and the model description (TOML) in headphones/.<br/><sub>Il report (JSON) scritto da `run` e la descrizione del modello (TOML) in headphones/.</sub> | attuale · current | 2026-11-18 |
 | [Riferimenti del protocollo MDR](02-riferimenti-protocollo.md)<br/><sub>MDR protocol references</sub> | Cosa dicono le fonti pubbliche sul protocollo Sony MDR, con licenze, fonti e punti verificati sulle nostre cuffie.<br/><sub>What public sources say about the Sony MDR protocol, with licenses, sources and what we verified on our headphones.</sub> | attuale · current | 2026-11-08 |
 
+## Decisioni · Decisions
+
+| Documento · Document | In breve · In short | Stato · Status | Verificato · Verified |
+|---|---|---|---|
+| [ADR-0001: A public repository that holds the probe and the protocol](decisions/0001-public-repo-with-the-protocol.md)<br/><sub>ADR-0001: Un repository pubblico con il probe e il protocollo</sub> | knurl-probe is public, MIT OR Apache-2.0, and holds the protocol crates the private Knurl app uses.<br/><sub>knurl-probe è pubblico, MIT OR Apache-2.0, e contiene i crate del protocollo usati dall'app Knurl, privata.</sub> | attuale · current | — |
+| [ADR-0002: Reports in JSON, model descriptions in TOML, aligned with Keyfold Probe](decisions/0002-reports-and-descriptions.md)<br/><sub>ADR-0002: Report in JSON, descrizioni dei modelli in TOML, come Keyfold Probe</sub> | A report is a JSON record written by the program; a description is a TOML file people edit, with a status that never claims more than the reports show.<br/><sub>Il report è un JSON scritto dal programma; la descrizione è un TOML che le persone modificano, con uno stato che non dice mai più di quanto mostrano i report.</sub> | attuale · current | — |
+| [ADR-0003: An app for people who are not technical, in the Knurl look](decisions/0003-an-app-for-non-technical-people.md)<br/><sub>ADR-0003: Un'app per chi non è tecnico, con l'aspetto di Knurl</sub> | Knurl Probe is a Slint app with five screens in the Knurl family look; the command line stays for developers.<br/><sub>Knurl Probe è un'app Slint con cinque schermate nell'aspetto della famiglia Knurl; la riga di comando resta per gli sviluppatori.</sub> | attuale · current | — |
+| [ADR-0004: Send through the bedrock relay as a data report](decisions/0004-send-through-the-relay.md)<br/><sub>ADR-0004: Invio tramite il relay di bedrock come report di tipo data</sub> | Send posts the report to the bedrock relay, which opens an issue here; no GitHub account, the exact request shown first.<br/><sub>Invia manda il report al relay di bedrock, che apre una issue qui; nessun account GitHub, e la richiesta esatta è mostrata prima.</sub> | attuale · current | — |
+| [ADR-0005: CI on the owner's runner, never for forks or Dependabot](decisions/0005-ci-on-the-owners-runner.md)<br/><sub>ADR-0005: CI sul runner del proprietario, mai per i fork e Dependabot</sub> | While the repository is private and the account has no hosted minutes, the Windows checks run on a self-hosted runner; forks and Dependabot always go to GitHub-hosted runners.<br/><sub>Finché il repository è privato e l'account non ha minuti, i controlli Windows girano su un runner self-hosted; fork e Dependabot vanno sempre sui runner di GitHub.</sub> | attuale · current | — |
+| [ADR-0006: The project uses the bedrock kit](decisions/0006-the-bedrock-kit.md)<br/><sub>ADR-0006: Il progetto usa il kit bedrock</sub> | Shared rules, checks and skills come from bedrock through sync PRs, as in every DooperDrew project.<br/><sub>Regole, controlli e skill comuni arrivano da bedrock con PR di sync, come in ogni progetto DooperDrew.</sub> | attuale · current | — |
+
 ## Diario e risultati · Records and results
 
 | Documento · Document | In breve · In short | Stato · Status | Verificato · Verified |
 |---|---|---|---|
 | [Risultati sulla WH-1000XM3](04-risultati-xm3.md)<br/><sub>WH-1000XM3 results</sub> | Cosa abbiamo verificato sulla XM3 dell'utente e cosa resta aperto.<br/><sub>What we verified on the user's XM3 and what is still open.</sub> | attuale · current | 2026-11-08 |
-
-## Da scrivere · To write
-
-- Visione e perimetro · Vision and scope (`topic: vision`, modulo · module `core`)
-- Architettura · Architecture (`topic: architecture`, modulo · module `core`)
-- Decisioni · Decisions (`topic: decisions`, modulo · module `core`)
-- Prove sull'hardware · Hardware tests (`topic: hardware-tests`, modulo · module `hardware`)
 
 <!-- bedrock:docs-index:end -->

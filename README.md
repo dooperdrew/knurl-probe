@@ -86,6 +86,10 @@ flowchart LR
 
 `knurl-protocol` has no I/O, so its tests run anywhere, Linux included, from bytes captured on real headphones. `knurl-device` opens the channel with Winsock (WinRT does not see it). The protocol sources and what each one is used for: [docs/02-riferimenti-protocollo.md](docs/02-riferimenti-protocollo.md) (in Italian).
 
+## Documentation
+- [Documentation index](docs/README.md): every doc with its summary and a map: vision, architecture, decisions, formats, how to add a model, hardware tests.
+- [Design reference](design/README.md): the look of the app.
+
 ## Working on it
 ```powershell
 cargo test --workspace
