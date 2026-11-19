@@ -1,6 +1,9 @@
 ---
 title: File formats
+title_it: Formati dei file
 summary: The report (JSON) written by `run` and the model description (TOML) in headphones/.
+summary_it: Il report (JSON) scritto da `run` e la descrizione del modello (TOML) in headphones/.
+lang: en
 type: reference
 topic: formats
 status: current

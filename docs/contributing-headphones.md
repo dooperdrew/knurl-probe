@@ -1,7 +1,10 @@
 ---
 title: Adding a headphone model
+title_it: Aggiungere un modello di cuffie
 summary: How to check your Sony headphones with the probe and turn the report into a description of the model.
-type: guide
+summary_it: Come controllare le tue cuffie Sony con il probe e trasformare il report nella descrizione del modello.
+lang: en
+type: how-to
 topic: contributing
 status: current
 verified: 2026-11-18
