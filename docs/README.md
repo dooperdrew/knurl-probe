@@ -8,6 +8,7 @@ Ordine di lettura consigliato · Suggested reading order.
 
 ```mermaid
 flowchart LR
+  design[["Design<br/>design/README.md"]]
   subgraph how_to["Fare · How-to"]
     d0["Adding a headphone model<br/><i>Aggiungere un modello di cuffie</i>"]
   end
@@ -21,6 +22,8 @@ flowchart LR
   how_to --> reference
   reference --> record
 ```
+
+**Riferimento di design · Design reference:** [design/README.md](../design/README.md)
 
 ## Fare · How-to
 
