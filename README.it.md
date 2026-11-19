@@ -2,21 +2,23 @@
 
 [English](README.md) · Italiano
 
-Uno strumento a riga di comando per Windows che trova le cuffie Sony accoppiate al PC e registra come parlano con il protocollo di controllo di Sony (MDR). È il modo in cui [Knurl](https://github.com/DooperDrew/knurl), l'app del tray per le WH-1000XM3 e WH-1000XM4, impara un modello nuovo: chi ha le cuffie avvia il probe, e quello che registra diventa dati di test e supporto nell'app.
+Un'app per Windows, con una riga di comando per gli sviluppatori, che trova le cuffie Sony accoppiate al PC e registra come parlano con il protocollo di controllo di Sony (MDR). È il modo in cui [Knurl](https://github.com/DooperDrew/knurl), l'app del tray per le WH-1000XM3 e WH-1000XM4, impara un modello nuovo: chi ha le cuffie avvia il probe, e quello che registra diventa dati di test e supporto nell'app.
 
 Qui c'è anche il codice che Knurl usa per parlare con le cuffie: il protocollo (`knurl-protocol`, senza I/O) e il collegamento di Windows (`knurl-device`).
 
 ## Stato
-**Non c'è ancora nessuna release.** La prima (0.1.0) conterrà `knurl-probe.exe` in uno zip, così per avviarlo non servirà Rust.
+**Non c'è ancora nessuna release.** La prima (0.1.0) è pronta per il tag: uno zip, `knurl-probe-0.1.0-windows-x64.zip`, con `knurl-probe.exe` (l'app, Knurl Probe), `knurl-probe-cli.exe` (la riga di comando), i README, le licenze e le note sulle terze parti, più il suo SHA-256. Si estrae dove si vuole e si avvia `knurl-probe.exe`: niente installer, niente Rust. `scripts/package.py` costruisce lo zip e lo controlla (elenco esatto dei file, ogni exe byte per byte, le informazioni di versione dell'app, note aggiornate, checksum); la CI lo esegue a ogni pull request e la release usa lo stesso script. Sarà nella pagina delle release di questo repository dopo il push del tag `v0.1.0`.
 
 **Usato su cuffie vere:** il 7 novembre 2026 il probe ha registrato il traffico della nostra WH-1000XM3 (firmware 4.5.2); quei frame sono i dati di test in `crates/knurl-protocol/tests/`. Risultati: [docs/04-risultati-xm3.md](docs/04-risultati-xm3.md).
 
 **Non ancora verificato:**
+- l'app su Windows: nessuno ha ancora guardato la sua finestra, e non ha controllato cuffie vere (il suo controllo è lo stesso codice di `knurl-probe-cli run`, che a sua volta non ha girato sulle cuffie dopo lo spostamento);
+- un invio vero dall'app (il relay accetta questi report solo dopo il suo prossimo deploy);
 - nessun altro modello, compresa la WH-1000XM4;
 - il secondo servizio Sony (MDR v2), che secondo le fonti pubbliche usano i modelli più recenti: il probe lo apre, ma ancora niente lo decodifica.
 
 ## Cosa fa
-Nessun comando cambia le impostazioni di Windows. `rfcomm-check` non manda dati; `watch` e `run` mandano solo richieste di lettura. `capture` conferma (ACK) quello che mandano le cuffie, e manda altro solo se lo chiedi tu: i frame passati con `--send-on-connect` o scritti al suo prompt (`send <hex>`, `raw <hex>`).
+La riga di comando è `knurl-probe-cli.exe` (dal sorgente: `cargo run -p knurl-probe -- <comando>`). Nessun comando cambia le impostazioni di Windows. `rfcomm-check` non manda dati; `watch` e `run` mandano solo richieste di lettura. `capture` conferma (ACK) quello che mandano le cuffie, e manda altro solo se lo chiedi tu: i frame passati con `--send-on-connect` o scritti al suo prompt (`send <hex>`, `raw <hex>`).
 
 | Comando | Cosa fa |
 |---|---|
@@ -47,7 +49,7 @@ Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su c
 **Privacy:** una cattura grezza contiene l'indirizzo Bluetooth delle cuffie. Finisce in `captures/raw/`, che git ignora; in questo repository entrano solo i frame, senza l'indirizzo.
 
 ## L'app
-**Knurl Probe** (`crates/knurl-probe-app`) fa lo stesso controllo di `run`, per chi non è tecnico: cinque schermate con l'aspetto di Knurl, chiaro e scuro (design: [design/README.md](design/README.md), in inglese).
+**Knurl Probe** (`knurl-probe.exe`, costruito da `crates/knurl-probe-app`) fa lo stesso controllo di `run`, per chi non è tecnico: cinque schermate con l'aspetto di Knurl, chiaro e scuro (design: [design/README.md](design/README.md), in inglese).
 
 1. **Benvenuto:** cosa fa, cosa contiene il report e cosa non contiene mai (né l'indirizzo Bluetooth, né il nome del PC o dell'utente, né un nome dato alle cuffie).
 2. **Scegli le cuffie:** le cuffie Sony accoppiate con Windows; se non ce ne sono, come accoppiarle e "Open Bluetooth settings".
@@ -59,7 +61,7 @@ Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su c
 cargo run --release -p knurl-probe-app
 ```
 
-**Non ancora verificato:** l'app non ha mai girato su Windows né sulle cuffie; le schermate sono state controllate solo come immagini rese su Linux da `cargo run -p knurl-probe-app --example snapshot -- <cartella>`, con valori d'esempio. Non è ancora in una release. Parla inglese, italiano e spagnolo (la lingua di Windows, oppure una scelta nella prima schermata); le traduzioni non sono state rilette da un madrelingua.
+**Non ancora verificato:** l'app non ha mai girato su Windows né sulle cuffie; le schermate sono state controllate solo come immagini rese su Linux da `cargo run -p knurl-probe-app --example snapshot -- <cartella>`, con valori d'esempio. Il suo exe ha l'icona di Knurl e le sue informazioni di versione (controllate da `scripts/package.py`). Parla inglese, italiano e spagnolo (la lingua di Windows, oppure una scelta nella prima schermata); le traduzioni non sono state rilette da un madrelingua.
 
 ## Avviarlo dal sorgente
 Servono Windows 10 o 11, le cuffie accoppiate come Bluetooth classico (la voce senza `LE_`) e Rust (la versione esatta è in `rust-toolchain.toml`; rustup la installa).
@@ -72,9 +74,9 @@ cargo run --release -p knurl-probe -- capture --device WH-1000XM4 --guided
 ## Come è fatto
 ```mermaid
 flowchart LR
-    app["knurl-probe-app<br/>Knurl Probe, Slint"] --> probe
+    app["knurl-probe-app<br/>knurl-probe.exe: Knurl Probe, Slint"] --> probe
     app --> report
-    probe["knurl-probe<br/>riga di comando + controllo condiviso"] --> device["knurl-device<br/>Windows: ricerca Bluetooth, Winsock"]
+    probe["knurl-probe<br/>knurl-probe-cli.exe + controllo condiviso"] --> device["knurl-device<br/>Windows: ricerca Bluetooth, Winsock"]
     probe --> report["knurl-report<br/>report, descrizioni<br/>(senza I/O)"]
     report --> protocol
     probe --> protocol

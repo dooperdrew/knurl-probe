@@ -1,6 +1,6 @@
 """Writes THIRD-PARTY-NOTICES.txt: the licences of the crates compiled into
-the exes for Windows (knurl-probe.exe, the command line, and the Knurl Probe
-app), which the release zip must carry (MIT, Apache-2.0 and similar licences
+the exes for Windows (knurl-probe.exe, the Knurl Probe app, and
+knurl-probe-cli.exe, the command line), which the release zip must carry (MIT, Apache-2.0 and similar licences
 ask for their text with binary copies).
 
 The list is what `cargo tree` resolves for both packages on the Windows target with

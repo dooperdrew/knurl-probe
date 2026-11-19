@@ -70,11 +70,11 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test
         run: cargo test --workspace --locked
-      - name: release build
-        run: cargo build --release --locked -p knurl-probe
+      - name: release build (the app and the command line)
+        run: cargo build --release --locked -p knurl-probe-app -p knurl-probe
       - name: zip and check it (same script as the release)
         shell: pwsh
-        run: python scripts/package.py --exe "$env:CARGO_TARGET_DIR/release/knurl-probe.exe" --out dist
+        run: python scripts/package.py --app "$env:CARGO_TARGET_DIR/release/knurl-probe.exe" --cli "$env:CARGO_TARGET_DIR/release/knurl-probe-cli.exe" --out dist
 
   deny:
     name: cargo deny

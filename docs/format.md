@@ -17,7 +17,7 @@ A **report** is what the probe writes after checking one pair of headphones: JSO
 
 ## The report (`reports/knurl-report-<model>-<time>.json`)
 
-Written by `knurl-probe run`. One file per check. It holds no Bluetooth address and no personal names: a Windows device name that is not a Sony model name is replaced by `(renamed by the user: not included)`.
+Written by Knurl Probe (the app) and by `knurl-probe-cli run`. One file per check. It holds no Bluetooth address and no personal names: a Windows device name that is not a Sony model name is replaced by `(renamed by the user: not included)`.
 
 ```json
 {
@@ -79,15 +79,15 @@ last = "2026-11-07"
 source = "where the facts come from"
 ```
 
-`knurl-probe validate FILE...` checks a description: an id that is not lowercase letters, digits and dashes, a file not named after its id, an empty name or model, a `reported` or `verified` status without enough reports, a code or firmware listed twice, a newer format.
+`knurl-probe-cli validate FILE...` checks a description: an id that is not lowercase letters, digits and dashes, a file not named after its id, an empty name or model, a `reported` or `verified` status without enough reports, a code or firmware listed twice, a newer format.
 
 ## Comparing a report with a description
 
-`knurl-probe check REPORT [--against FILE]` compares them (without `--against`, with the shipped description of the report's model) and ends with exit code 1 when they differ. It compares the model name, the service that answered, the protocol version, the feature codes and the firmware. What the report could not read (a missing answer, an MDR v2 conversation) is not compared.
+`knurl-probe-cli check REPORT [--against FILE]` compares them (without `--against`, with the shipped description of the report's model) and ends with exit code 1 when they differ. It compares the model name, the service that answered, the protocol version, the feature codes and the firmware. What the report could not read (a missing answer, an MDR v2 conversation) is not compared.
 
 ## Status of a description
 - `unverified`: written from documents or other tools. Nobody ran the probe on the headphones.
-- `reported`: one report agrees with it (`knurl-probe check` passes).
+- `reported`: one report agrees with it (`knurl-probe-cli check` passes).
 - `verified`: two or more reports from different people agree.
 
 A description never claims more than its reports show. The same rule and the same three steps are used by Keyfold Probe for keyboards.

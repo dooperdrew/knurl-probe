@@ -1,4 +1,4 @@
-//! `knurl-probe`: finds Sony headphones paired with Windows and records how
+//! `knurl-probe-cli` (package `knurl-probe`): finds Sony headphones paired with Windows and records how
 //! they talk, to add new models to Knurl.
 //!
 //! On Windows, all read-only towards Windows settings:
@@ -29,7 +29,11 @@ use clap::{Parser, Subcommand};
 pub use knurl_probe::ServiceKind;
 
 #[derive(Parser)]
-#[command(version, about = "Knurl hardware-spike probe")]
+#[command(
+    name = "knurl-probe-cli",
+    version,
+    about = "Knurl Probe on the command line: find Sony headphones and record how they talk"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

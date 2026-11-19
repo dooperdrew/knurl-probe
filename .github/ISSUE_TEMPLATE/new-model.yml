@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you. Run `knurl-probe run` with the headphones on and attach the file it writes in `reports/`: it holds no Bluetooth address and no personal names. Please do not attach a raw capture (`captures/raw/`): that one holds your headphones' Bluetooth address.
+        Thank you. Open Knurl Probe (`knurl-probe.exe`) with the headphones on, then "Save to a file" and attach the file (or use "Send", which opens the issue for you). From the command line, `knurl-probe-cli run` writes it to `reports/`: it holds no Bluetooth address and no personal names. Please do not attach a raw capture (`captures/raw/`): that one holds your headphones' Bluetooth address.
   - type: input
     id: model
     attributes:
@@ -24,7 +24,7 @@ body:
     id: report
     attributes:
       label: The report
-      description: Drag the file from `reports/` here, or paste what `knurl-probe run` printed.
+      description: Drag the file from `reports/` here, or paste what `knurl-probe-cli run` printed.
     validations:
       required: true
   - type: textarea

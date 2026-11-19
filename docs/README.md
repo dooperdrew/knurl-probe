@@ -29,7 +29,7 @@ flowchart LR
 
 | Documento · Document | In breve · In short | Stato · Status | Verificato · Verified |
 |---|---|---|---|
-| [Adding a headphone model](contributing-headphones.md)<br/><sub>Aggiungere un modello di cuffie</sub> | How to check your Sony headphones with the probe and turn the report into a description of the model.<br/><sub>Come controllare le tue cuffie Sony con il probe e trasformare il report nella descrizione del modello.</sub> | attuale · current | 2026-11-18 |
+| [Adding a headphone model](contributing-headphones.md)<br/><sub>Aggiungere un modello di cuffie</sub> | How to check your Sony headphones with the probe and turn the report into a description of the model.<br/><sub>Come controllare le tue cuffie Sony con il probe e trasformare il report nella descrizione del modello.</sub> | attuale · current | 2026-11-19 |
 
 ## Consultare · Reference
 

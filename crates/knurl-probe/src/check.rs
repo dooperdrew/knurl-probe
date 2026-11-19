@@ -1,4 +1,4 @@
-//! The read-only check of one pair of headphones, shared by `knurl-probe run`
+//! The read-only check of one pair of headphones, shared by `knurl-probe-cli run`
 //! and the app. The Bluetooth address is used to connect and kept private:
 //! [`Headphones`] never shows it, and the report never holds it.
 

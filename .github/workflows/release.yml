@@ -1,9 +1,10 @@
 name: Release
 
-# A tag v<version> equal to Cargo.toml's version builds knurl-probe.exe,
-# zips it with the READMEs, licences and third-party notices, checks the zip
-# (scripts/package.py) and attaches it to a DRAFT release. Publishing stays
-# a manual step.
+# A tag v<version> equal to Cargo.toml's version builds knurl-probe.exe (the
+# app) and knurl-probe-cli.exe (the command line), zips them with the
+# READMEs, licences and third-party notices, checks the zip
+# (scripts/package.py, the same check CI runs on every pull request) and
+# attaches it to a DRAFT release. Publishing stays a manual step.
 
 on:
   push:
@@ -24,8 +25,11 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      checks: read
     steps:
-      - name: The tag is on main
+      - name: The tag is on main and its checks passed
+        # A release is built only from a commit that reached main through a
+        # green PR: the same SHA carries the PR's check runs.
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,6 +40,17 @@ jobs:
           if ($status -ne "identical" -and $status -ne "behind") {
             Write-Error "Commit $env:SHA is not on main (compare status: $status)"
             exit 1
+          }
+          $runs = (gh api "repos/$env:REPO/commits/$env:SHA/check-runs?per_page=100" | ConvertFrom-Json).check_runs
+          # The latest completed run of each check decides: a failed re-run after
+          # a green one blocks the release. Skipped runs don't count.
+          foreach ($name in @("test / package (Windows)", "cargo deny", "workflow lint / actionlint / zizmor", "repo checks / repository hygiene", "docs / documentation")) {
+            $latest = $runs | Where-Object { $_.name -eq $name -and $_.status -eq "completed" -and $_.conclusion -ne "skipped" } |
+              Sort-Object { [datetime]$_.completed_at } | Select-Object -Last 1
+            if (-not $latest -or $latest.conclusion -ne "success") {
+              Write-Error "Check '$name' has not passed on $env:SHA (latest: $($latest.conclusion))"
+              exit 1
+            }
           }
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,12 +77,12 @@ jobs:
         run: cargo test --workspace --locked
 
       - name: Build
-        run: cargo build --release --locked -p knurl-probe
+        run: cargo build --release --locked -p knurl-probe-app -p knurl-probe
 
       - name: Zip and check it
         shell: pwsh
         run: |
-          $zip = (python scripts/package.py --exe target/release/knurl-probe.exe --out dist | Select-Object -Last 1)
+          $zip = (python scripts/package.py --app target/release/knurl-probe.exe --cli target/release/knurl-probe-cli.exe --out dist | Select-Object -Last 1)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
           python scripts/package.py --notes $env:VERSION | Out-File -FilePath release-notes.md -Encoding utf8

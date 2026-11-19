@@ -8,6 +8,12 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# The command line for developers ships as knurl-probe-cli.exe; knurl-probe.exe
+# is the app (crates/knurl-probe-app).
+[[bin]]
+name = "knurl-probe-cli"
+path = "src/main.rs"
+
 [dependencies]
 knurl-protocol.workspace = true
 knurl-device.workspace = true

@@ -1,4 +1,4 @@
-//! `knurl-probe run`: checks one pair of headphones read-only and writes
+//! `knurl-probe-cli run`: checks one pair of headphones read-only and writes
 //! the report (crate `knurl-report`) to a file, with a short summary. The
 //! Bluetooth address is used to connect and never written anywhere.
 

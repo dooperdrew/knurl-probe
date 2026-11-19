@@ -8,6 +8,12 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# The app ships as knurl-probe.exe, the name people see; the command line is
+# knurl-probe-cli.exe (crates/knurl-probe).
+[[bin]]
+name = "knurl-probe"
+path = "src/main.rs"
+
 [dependencies]
 knurl-probe.workspace = true
 knurl-report.workspace = true
@@ -22,6 +28,11 @@ png = "0.18"
 
 [build-dependencies]
 slint-build = "1.18"
+# The exe's icon and version information, rendered from design/icons as in the
+# Knurl app (same versions, so nothing new is vetted).
+embed-resource = "3.0.12"
+png = "0.18"
+resvg = { version = "0.48", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 knurl-device.workspace = true

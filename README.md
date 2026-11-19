@@ -2,21 +2,23 @@
 
 English · [Italiano](README.it.md)
 
-A command-line tool for Windows that finds Sony headphones paired with the PC and records how they talk over Sony's control protocol (MDR). It is how [Knurl](https://github.com/DooperDrew/knurl), the tray app for the WH-1000XM3 and WH-1000XM4, learns a new model: someone with the headphones runs the probe, and what it records becomes test data and support in the app.
+A Windows app, with a command line for developers, that finds Sony headphones paired with the PC and records how they talk over Sony's control protocol (MDR). It is how [Knurl](https://github.com/DooperDrew/knurl), the tray app for the WH-1000XM3 and WH-1000XM4, learns a new model: someone with the headphones runs the probe, and what it records becomes test data and support in the app.
 
 This repository also holds the code Knurl uses to talk to the headphones: the protocol (`knurl-protocol`, no I/O) and the Windows connection (`knurl-device`).
 
 ## Status
-**Nothing is released yet.** The first release (0.1.0) will ship `knurl-probe.exe` in a zip, so you will not need Rust to run it.
+**Nothing is released yet.** The first release (0.1.0) is ready to tag: a zip, `knurl-probe-0.1.0-windows-x64.zip`, with `knurl-probe.exe` (the app, Knurl Probe), `knurl-probe-cli.exe` (the command line), the READMEs, the licences and the third-party notices, plus its SHA-256. Unzip it anywhere and run `knurl-probe.exe`; no installer, no Rust. `scripts/package.py` builds the zip and checks it (exact file list, each exe byte for byte, the app's version information, notices up to date, checksum); CI runs it on every pull request and the release uses the same script. It will be on this repository's releases page once the `v0.1.0` tag is pushed.
 
 **Used on real headphones:** on 7 November 2026 the probe recorded the traffic of our WH-1000XM3 (firmware 4.5.2); those frames are the test data in `crates/knurl-protocol/tests/`. Results: [docs/04-risultati-xm3.md](docs/04-risultati-xm3.md) (in Italian).
 
 **Not verified yet:**
+- the app on Windows: no person has looked at its window, and it has not checked real headphones (its check is the same code as `knurl-probe-cli run`, which has not run on headphones since the move either);
+- a real send from the app (the relay accepts these reports only after its next deploy);
 - any other model, the WH-1000XM4 included;
 - the second Sony service (MDR v2), which public sources say newer models use: the probe can open it but nothing decodes it yet.
 
 ## What it does
-No command changes Windows settings. `rfcomm-check` sends no data; `watch` and `run` send only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
+The command line is `knurl-probe-cli.exe` (from source: `cargo run -p knurl-probe -- <command>`). No command changes Windows settings. `rfcomm-check` sends no data; `watch` and `run` send only read requests. `capture` acknowledges what the headphones send, and sends anything else only when you ask: frames passed with `--send-on-connect`, or typed at its prompt (`send <hex>`, `raw <hex>`).
 
 | Command | What it does |
 |---|---|
@@ -47,7 +49,7 @@ Each model has a description in [`headphones/`](headphones): the service it answ
 **Privacy:** a raw capture holds your headphones' Bluetooth address. It is written to `captures/raw/`, which git ignores; only the frames, without the address, ever go into this repository.
 
 ## The app
-**Knurl Probe** (`crates/knurl-probe-app`) is the same check as `run`, for people who are not technical: five screens in the Knurl look, light and dark (design: [design/README.md](design/README.md)).
+**Knurl Probe** (`knurl-probe.exe`, built from `crates/knurl-probe-app`) is the same check as `run`, for people who are not technical: five screens in the Knurl look, light and dark (design: [design/README.md](design/README.md)).
 
 1. **Welcome:** what it does, what the report holds and what it never holds (no Bluetooth address, no PC or user name, no name you gave your headphones).
 2. **Choose your headphones:** the Sony headphones paired with Windows; if none, how to pair them and "Open Bluetooth settings".
@@ -59,7 +61,7 @@ Each model has a description in [`headphones/`](headphones): the service it answ
 cargo run --release -p knurl-probe-app
 ```
 
-**Not verified yet:** the app has not run on Windows or on headphones; its screens were checked only as images rendered on Linux by `cargo run -p knurl-probe-app --example snapshot -- <folder>`, with sample values. It is not in a release yet. It speaks English, Italian and Spanish (Windows' language by default, a choice on the first screen); the translations were not read by a native speaker.
+**Not verified yet:** the app has not run on Windows or on headphones; its screens were checked only as images rendered on Linux by `cargo run -p knurl-probe-app --example snapshot -- <folder>`, with sample values. Its exe carries the Knurl icon and its version information (checked by `scripts/package.py`). It speaks English, Italian and Spanish (Windows' language by default, a choice on the first screen); the translations were not read by a native speaker.
 
 ## Run it from source
 You need Windows 10 or 11, the headphones paired as a classic Bluetooth device (the entry without `LE_`), and Rust (the exact version is pinned in `rust-toolchain.toml`; rustup installs it).
@@ -72,9 +74,9 @@ cargo run --release -p knurl-probe -- capture --device WH-1000XM4 --guided
 ## How it is built
 ```mermaid
 flowchart LR
-    app["knurl-probe-app<br/>Knurl Probe, Slint"] --> probe
+    app["knurl-probe-app<br/>knurl-probe.exe: Knurl Probe, Slint"] --> probe
     app --> report
-    probe["knurl-probe<br/>command line + shared check"] --> device["knurl-device<br/>Windows: Bluetooth lookup, Winsock"]
+    probe["knurl-probe<br/>knurl-probe-cli.exe + shared check"] --> device["knurl-device<br/>Windows: Bluetooth lookup, Winsock"]
     probe --> report["knurl-report<br/>report, descriptions<br/>(no I/O)"]
     report --> protocol
     probe --> protocol
