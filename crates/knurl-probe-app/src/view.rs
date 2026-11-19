@@ -5,7 +5,8 @@ use knurl_probe::CheckStep;
 use knurl_report::{RENAMED, Report, ServiceResult, Verdict};
 use slint::{ModelRc, SharedString, VecModel};
 
-use crate::flow::{Flow, Page, Search};
+use crate::flow::{Flow, Page, Search, Sending};
+use crate::send::{self, NotSendable};
 use crate::ui::{Fact, MainWindow, StepRow};
 
 /// The result screen in plain words.
@@ -139,6 +140,15 @@ fn strings(items: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
     ))
 }
 
+/// What "See what will be sent" shows: the exact request body, or, when the
+/// report is over the relay's limit (nothing is sent then), the report itself.
+pub fn sent_data(report: &Report, version: &str) -> (String, bool) {
+    match send::request_body(report, version) {
+        Ok(body) => (body, false),
+        Err(NotSendable::TooLong { .. }) => (report.to_json(), true),
+    }
+}
+
 /// Hands the whole state to the window.
 pub fn apply(ui: &MainWindow, flow: &Flow) {
     ui.set_page(match flow.page {
@@ -188,8 +198,19 @@ pub fn apply(ui: &MainWindow, flow: &Flow) {
             .collect();
         ui.set_facts(ModelRc::new(VecModel::from(facts)));
         ui.set_problems(strings(r.problems));
-        ui.set_data(report.to_json().into());
+        let (data, too_long) = sent_data(report, env!("CARGO_PKG_VERSION"));
+        ui.set_data(data.into());
+        ui.set_too_long(too_long);
     }
+    let (state, error, issue) = match &flow.sending {
+        Sending::Idle => (0, String::new(), String::new()),
+        Sending::InProgress => (1, String::new(), String::new()),
+        Sending::Sent(n) => (2, String::new(), send::issue_url(*n)),
+        Sending::Failed(reason) => (3, reason.clone(), String::new()),
+    };
+    ui.set_send_state(state);
+    ui.set_send_error(error.into());
+    ui.set_issue_url(issue.into());
     ui.set_show_data(flow.show_data);
     let (saved, failed) = match &flow.saved {
         Some(Ok(path)) => (path.clone(), String::new()),
@@ -288,6 +309,19 @@ mod tests {
         assert_eq!(v.facts[4].1, "80 %");
         assert_eq!(v.facts[5].1, "MDR v1 and MDR v2");
         assert_eq!(v.problems.len(), 1);
+    }
+
+    #[test]
+    fn the_data_shown_is_the_request_that_is_sent() {
+        let r = report(Verdict::NewModel);
+        let (shown, too_long) = sent_data(&r, "0.1.0");
+        assert!(!too_long);
+        assert_eq!(shown, send::request_body(&r, "0.1.0").expect("body"));
+        let mut long = report(Verdict::NewModel);
+        long.problems = vec!["x".repeat(send::MAX_ATTACHMENT)];
+        let (shown, too_long) = sent_data(&long, "0.1.0");
+        assert!(too_long);
+        assert_eq!(shown, long.to_json());
     }
 
     #[test]

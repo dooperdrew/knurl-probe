@@ -27,6 +27,17 @@ pub enum Search {
     Failed(String),
 }
 
+/// Sending the report to the relay, on the Send screen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Sending {
+    Idle,
+    InProgress,
+    /// The relay opened this issue.
+    Sent(u64),
+    /// Not sent, with the reason.
+    Failed(String),
+}
+
 /// What happened: a click, or the outcome of work the app asked for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -41,6 +52,9 @@ pub enum Event {
     ToggleData,
     /// The file was written (its path) or not (the reason).
     Saved(Result<String, String>),
+    Send,
+    /// The relay opened an issue (its number) or the report was not sent.
+    SendDone(Result<u64, String>),
     Back,
 }
 
@@ -51,6 +65,8 @@ pub enum Effect {
     Search,
     /// Check the headphones at this index of the last search.
     Check(usize),
+    /// Send the report to the relay.
+    Send,
 }
 
 /// The state of the whole app.
@@ -66,6 +82,7 @@ pub struct Flow {
     /// The exact data that would be sent is shown.
     pub show_data: bool,
     pub saved: Option<Result<String, String>>,
+    pub sending: Sending,
 }
 
 impl Default for Flow {
@@ -78,6 +95,7 @@ impl Default for Flow {
             report: None,
             show_data: false,
             saved: None,
+            sending: Sending::Idle,
         }
     }
 }
@@ -142,6 +160,21 @@ impl Flow {
                 self.saved = Some(result);
                 None
             }
+            // Once sent, a second click would open a second issue.
+            (Page::Send, Event::Send)
+                if self.report.is_some()
+                    && matches!(self.sending, Sending::Idle | Sending::Failed(_)) =>
+            {
+                self.sending = Sending::InProgress;
+                Some(Effect::Send)
+            }
+            (Page::Send, Event::SendDone(result)) if self.sending == Sending::InProgress => {
+                self.sending = match result {
+                    Ok(issue) => Sending::Sent(issue),
+                    Err(reason) => Sending::Failed(reason),
+                };
+                None
+            }
             (Page::Choose, Event::Back) => {
                 self.page = Page::Welcome;
                 None
@@ -151,7 +184,8 @@ impl Flow {
                 self.page = Page::Choose;
                 None
             }
-            (Page::Send, Event::Back) => {
+            // Not while sending: the answer belongs to this screen.
+            (Page::Send, Event::Back) if self.sending != Sending::InProgress => {
                 self.page = Page::Result;
                 None
             }
@@ -163,6 +197,8 @@ impl Flow {
         self.page = Page::Checking;
         self.steps.clear();
         self.report = None;
+        // A new report can be sent; the last one's outcome belonged to it.
+        self.sending = Sending::Idle;
         Some(Effect::Check(index))
     }
 }
@@ -256,6 +292,44 @@ mod tests {
         // A second answer to the same search is ignored.
         f.handle(Event::DevicesFound(Ok(Vec::new())));
         assert_eq!(f.search, Search::Found(vec!["WH-1000XM3".into()]));
+    }
+
+    #[test]
+    fn send_once_retry_after_a_failure_never_twice_after_success() {
+        let mut f = Flow::default();
+        f.handle(Event::Start);
+        f.handle(Event::DevicesFound(Ok(vec!["WH-1000XM6".into()])));
+        f.handle(Event::Choose(0));
+        f.handle(Event::Checked(report("WH-1000XM6")));
+        assert_eq!(f.handle(Event::Send), None, "not on the result screen");
+        f.handle(Event::ToSend);
+        assert_eq!(f.handle(Event::Send), Some(Effect::Send));
+        assert_eq!(f.sending, Sending::InProgress);
+        assert_eq!(f.handle(Event::Send), None, "already sending");
+        assert_eq!(f.handle(Event::Back), None, "no way back while sending");
+        assert_eq!(f.page, Page::Send);
+        f.handle(Event::SendDone(Err("timeout".into())));
+        assert_eq!(f.sending, Sending::Failed("timeout".into()));
+        assert_eq!(f.handle(Event::Send), Some(Effect::Send), "try again");
+        f.handle(Event::SendDone(Ok(12)));
+        assert_eq!(f.sending, Sending::Sent(12));
+        assert_eq!(
+            f.handle(Event::Send),
+            None,
+            "a second issue is never opened"
+        );
+        // A late answer changes nothing.
+        f.handle(Event::SendDone(Err("late".into())));
+        assert_eq!(f.sending, Sending::Sent(12));
+        f.handle(Event::Back);
+        f.handle(Event::ToSend);
+        assert_eq!(f.sending, Sending::Sent(12), "the same report stays sent");
+        assert_eq!(f.handle(Event::Send), None);
+        f.handle(Event::Back);
+        f.handle(Event::CheckAgain);
+        f.handle(Event::Checked(report("WH-1000XM6")));
+        f.handle(Event::ToSend);
+        assert_eq!(f.sending, Sending::Idle, "a new report can be sent");
     }
 
     #[test]

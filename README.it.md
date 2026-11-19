@@ -53,7 +53,7 @@ Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su c
 2. **Scegli le cuffie:** le cuffie Sony accoppiate con Windows; se non ce ne sono, come accoppiarle e "Open Bluetooth settings".
 3. **Controllo:** i passi, in sola lettura, su un thread separato.
 4. **Risultato** in parole semplici: già supportate, modello nuovo, servizio più recente non ancora decodificato, oppure niente letto, con cosa è stato letto.
-5. **Invio:** "Save to a file" (in Documenti\Knurl Probe), "See what will be sent" (il JSON esatto) e un link al modulo "New headphone model". **L'invio dall'app non c'è ancora:** il pulsante Send è visibile ma disattivato.
+5. **Invio:** "Send" apre una issue in questo repository tramite il relay di bedrock, senza account GitHub; "See what will be sent" mostra prima la richiesta esatta. "Save to a file" (in Documenti\Knurl Probe) e il link al modulo "New headphone model" funzionano sempre. **Non verificato:** un invio vero (il relay accetta questi report solo dal suo prossimo deploy; fino ad allora l'app dice che il server non li accetta ancora) e l'app su Windows.
 
 ```powershell
 cargo run --release -p knurl-probe-app

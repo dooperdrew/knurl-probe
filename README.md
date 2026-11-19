@@ -53,7 +53,7 @@ Each model has a description in [`headphones/`](headphones): the service it answ
 2. **Choose your headphones:** the Sony headphones paired with Windows; if none, how to pair them and "Open Bluetooth settings".
 3. **Checking:** the steps, read-only, on a background thread.
 4. **Result** in plain words: already supported, new model, newer service not decoded yet, or nothing read, with what was read.
-5. **Send:** "Save to a file" (into Documents\Knurl Probe), "See what will be sent" (the exact JSON) and a link to the "New headphone model" form. **Sending from the app is not available yet:** the Send button is shown disabled.
+5. **Send:** "Send" opens an issue in this repository through the bedrock relay, without a GitHub account; "See what will be sent" shows the exact request first. "Save to a file" (into Documents\Knurl Probe) and the link to the "New headphone model" form always work. **Not verified:** a real send (the relay accepts these reports only after its next deploy; until then the app says the server does not accept them yet) and the app on Windows.
 
 ```powershell
 cargo run --release -p knurl-probe-app

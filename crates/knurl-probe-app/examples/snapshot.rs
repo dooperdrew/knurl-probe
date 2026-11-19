@@ -184,6 +184,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "could not write the file: access denied (sample)".into(),
         )));
         shot(&ui, &window, &not_saved, &at("13-send-not-saved"))?;
+        let mut sending = f.clone();
+        sending.handle(Event::Send);
+        shot(&ui, &window, &sending, &at("14-send-sending"))?;
+        let mut sent = sending.clone();
+        sent.handle(Event::SendDone(Ok(42)));
+        shot(&ui, &window, &sent, &at("15-send-sent"))?;
+        let mut refused = sending.clone();
+        refused.handle(Event::SendDone(Err(
+            "the server does not accept reports from Knurl Probe yet".into(),
+        )));
+        shot(&ui, &window, &refused, &at("16-send-not-sent"))?;
     }
     Ok(())
 }

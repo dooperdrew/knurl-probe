@@ -115,6 +115,12 @@ export component MainWindow inherits Window {
     in property <string> data;
     in property <string> saved-path;
     in property <string> save-error;
+    // The report is over the relay's limit: it can only be saved.
+    in property <bool> too-long;
+    // 0 idle, 1 sending, 2 sent, 3 not sent.
+    in property <int> send-state;
+    in property <string> send-error;
+    in property <string> issue-url;
 
     in property <string> version;
 
@@ -126,6 +132,8 @@ export component MainWindow inherits Window {
     callback to-send();
     callback toggle-data();
     callback save();
+    callback send();
+    callback open-issue();
     callback show-in-folder();
     callback open-issue-form();
     callback back();
@@ -146,7 +154,7 @@ export component MainWindow inherits Window {
                 vertical-alignment: center;
                 horizontal-stretch: 1;
             }
-            if root.page == 1 || root.page == 3 || root.page == 4: LinkText {
+            if root.page == 1 || root.page == 3 || (root.page == 4 && root.send-state != 1): LinkText {
                 text: @tr("Back");
                 clicked => { root.back(); }
             }
@@ -365,25 +373,41 @@ export component MainWindow inherits Window {
             vertical-stretch: 1;
             Heading {
                 title: @tr("Send the report");
-                text: @tr("Sending from the app is not available in this version yet. Save the report and attach it to a \"New headphone model\" issue on GitHub.");
+                text: root.too-long ? @tr("This report is too long to send from the app. Save it and attach it to a \"New headphone model\" issue on GitHub.")
+                    : @tr("Send opens an issue in the Knurl Probe repository on GitHub with this report. You need no GitHub account. See first exactly what leaves this PC.");
             }
             HorizontalLayout {
                 spacing: 8px;
                 alignment: start;
                 BrandButton {
-                    text: @tr("Save to a file");
+                    // Disabled while sending and once sent: one report, one issue.
+                    text: root.send-state == 1 ? @tr("Sending...") : @tr("Send");
                     primary: true;
-                    clicked => { root.save(); }
+                    enabled: !root.too-long && (root.send-state == 0 || root.send-state == 3);
+                    clicked => { root.send(); }
                 }
                 BrandButton {
-                    // Shown, and disabled: never a fake "Sent".
-                    text: @tr("Send");
-                    enabled: false;
+                    text: @tr("Save to a file");
+                    clicked => { root.save(); }
                 }
                 BrandButton {
                     text: root.show-data ? @tr("Hide the data") : @tr("See what will be sent");
                     clicked => { root.toggle-data(); }
                 }
+            }
+            if root.send-state == 2: Notice {
+                kind: 2;
+                title: @tr("Sent. Thank you!");
+                text: @tr("The report is now an issue on GitHub: {}", root.issue-url);
+                action: @tr("Open the issue");
+                action-clicked => { root.open-issue(); }
+            }
+            if root.send-state == 3: Notice {
+                kind: 0;
+                title: @tr("Not sent");
+                text: root.send-error;
+                action: @tr("Try again");
+                action-clicked => { root.send(); }
             }
             if root.saved-path != "": Notice {
                 kind: 2;

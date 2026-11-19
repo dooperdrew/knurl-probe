@@ -10,7 +10,7 @@ use std::sync::Arc;
 use knurl_probe::check::{self, Headphones};
 use knurl_probe_app::flow::{Effect, Event, Flow};
 use knurl_probe_app::ui::MainWindow;
-use knurl_probe_app::{ISSUE_FORM, view};
+use knurl_probe_app::{ISSUE_FORM, send, view};
 use slint::ComponentHandle;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{
@@ -48,6 +48,16 @@ pub fn run() -> Result<(), slint::PlatformError> {
     ui.on_to_send(|| dispatch(Event::ToSend));
     ui.on_toggle_data(|| dispatch(Event::ToggleData));
     ui.on_back(|| dispatch(Event::Back));
+    ui.on_send(|| dispatch(Event::Send));
+    ui.on_open_issue(|| {
+        let issue = APP.with(|app| match app.borrow().as_ref()?.flow.sending {
+            knurl_probe_app::flow::Sending::Sent(n) => Some(n),
+            _ => None,
+        });
+        if let Some(n) = issue {
+            let _ = shell_open(&HSTRING::from(send::issue_url(n)));
+        }
+    });
     ui.on_save(|| {
         let result = save_report();
         dispatch(Event::Saved(result));
@@ -85,6 +95,7 @@ fn dispatch(event: Event) {
     match effect {
         Some(Effect::Search) => spawn_search(),
         Some(Effect::Check(index)) => spawn_check(index),
+        Some(Effect::Send) => spawn_send(),
         None => {}
     }
 }
@@ -122,6 +133,31 @@ fn spawn_check(index: usize) {
             let _ = slint::invoke_from_event_loop(move || dispatch(Event::Progress(step)));
         });
         let _ = slint::invoke_from_event_loop(move || dispatch(Event::Checked(Box::new(report))));
+    });
+}
+
+/// Sends the report on a worker thread; the answer comes back as an event.
+fn spawn_send() {
+    let report = APP.with(|app| app.borrow().as_ref()?.flow.report.clone());
+    let Some(report) = report else {
+        dispatch(Event::SendDone(Err("there is no report to send".into())));
+        return;
+    };
+    std::thread::spawn(move || {
+        let outcome = match send::relay_config() {
+            Ok(config) => send::send(
+                &crate::winhttp::WinHttp,
+                &config,
+                &report,
+                env!("CARGO_PKG_VERSION"),
+            ),
+            Err(reason) => send::Outcome::NotSent(reason),
+        };
+        let result = match outcome {
+            send::Outcome::Sent { issue } => Ok(issue),
+            send::Outcome::NotSent(reason) => Err(reason),
+        };
+        let _ = slint::invoke_from_event_loop(move || dispatch(Event::SendDone(result)));
     });
 }
 

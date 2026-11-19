@@ -16,7 +16,7 @@ The app's code (`crates/knurl-probe-app/ui/`) follows this file. It is the Knurl
 - **Name:** Knurl Probe, in the window title and the header of every screen. It is part of Knurl: it exists to teach Knurl new headphones.
 - **Mark:** Knurl's knob seen from above (graphite disc, hub, orange index at 45°); on dark backgrounds the disc turns stone. Files: `design/icons/knob.svg`, `knob-dark.svg`, `app-icon.svg`, `app-icon-small.svg`, the same as Knurl's.
 - **Voice:** for people who are not technical. Plain sentences, one idea each; what the app does and what it never does said before it does it; no Bluetooth jargon on the screens ("control service" and "MDR" appear only in "What was read" and in errors, where they help a developer reading a report).
-- **Honesty:** nothing fake. The Send button is shown and disabled until sending exists; errors are shown with Windows' reason; "Saved" appears only after the file is written.
+- **Honesty:** nothing fake. "Sent" appears only when the relay answers with the issue it opened, and links to it; any other answer is "Not sent" with the reason in plain words; "Saved" appears only after the file is written.
 
 ## 2. Tokens
 The colours, radii and spaces are Knurl's, unchanged: [tokens.json](tokens.json). `ui/theme.slint` mirrors the colours, picked by Windows' light or dark setting through Slint's `Palette`; `tests/design_tokens.rs` fails when the two differ or when a `.slint` file other than `theme.slint` writes a colour.
@@ -54,24 +54,26 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 | 2. Choose your headphones | searching (progress bar); the paired Sony headphones, each with Check; none found (how to pair, Search again, Open Bluetooth settings); the lookup failed (Windows' reason) | `02` to `05` |
 | 3. Checking | the four steps: opening the channel, asking model/firmware/features, listening on the newer service, putting the report together; a step the headphones do not offer is marked "not offered" | `06-checking` |
 | 4. Result | in plain words: already supported, new model, newer service (not decoded), nothing read; "What was read"; problems as error notices; Next, Check again | `07` to `10` |
-| 5. Send | Save to a file (Documents\Knurl Probe), Send (disabled in this version), See what will be sent (the exact JSON), the GitHub issue form; Saved with Show in folder, or the reason it was not saved with Try again | `11` to `13` |
+| 5. Send | Send (primary), Save to a file (Documents\Knurl Probe), See what will be sent (the exact request that leaves the PC), the GitHub issue form; Sending… (Send and Back disabled); Sent with the issue link and Open the issue; Not sent with the reason and Try again; Saved with Show in folder, or the reason it was not saved; a report over the relay's limit can only be saved | `11` to `16` |
 
-`cargo run -p knurl-probe-app --example snapshot -- <folder>` renders the 13 states in light and dark (26 PNGs) with Slint's software renderer and **sample** values. The images are not committed (they are regenerated, and on Linux the fonts differ from Segoe UI).
+`cargo run -p knurl-probe-app --example snapshot -- <folder>` renders the 16 states in light and dark (32 PNGs) with Slint's software renderer and **sample** values. The images are not committed (they are regenerated, and on Linux the fonts differ from Segoe UI).
 
 ## 5. Decisions
 - **2026-11-18, the Knurl family, copied.** The owner chose the Knurl look for the probe (DooperDrew/knurl-probe#2). Tokens and components are copied rather than shared through a crate: the two repositories are separate (one private, one public) and the probe needs only a few components.
 - **2026-11-18, one fixed window, five screens.** A wizard: one thing per screen, Back on the screens where going back is safe (not while checking).
-- **2026-11-18, Send disabled, not hidden.** The button is on the Send screen from the start, disabled, with a sentence saying sending is not available yet and how to send the file instead; the relay client comes in a later pull request.
+- **2026-11-18, Send disabled, not hidden** (until the relay client existed).
+- **2026-11-19, Send through the bedrock relay.** Send posts a `data` report to the relay, which opens an issue in this repository (no GitHub account needed). Send is the primary button; it is disabled while sending and once sent, so one report opens one issue (a new check can be sent again). "See what will be sent" shows the exact request body, the report included as an escaped string: harder to read than the report alone, but it is byte for byte what leaves the PC. The attachment is named `knurl-report.json`, short, because the relay hides long letter-and-digit runs.
 - **2026-11-18, the Slint badge on the first screen.** The Slint Royalty-free licence 2.0 asks for the AboutSlint widget in an About or splash screen; the welcome screen is the app's first screen, so the badge sits in its footer, small, as in Knurl's About window.
 - **2026-11-18, the Windows name on the Choose screen only.** The list shows the name Windows gives the headphones, which may be one the user chose; it stays on the PC. The report keeps it only if it is a Sony model name (`knurl-report`).
 
 ## 6. Verified and not verified
 **Verified**
 - `python design/contrast.py`: 60 pairs, light and dark, none under its minimum.
-- `cargo test -p knurl-probe-app`: theme equals tokens, no colour outside the theme, the flow between the screens, the plain-words result, the step states.
-- The 26 images of the snapshot example, looked at one by one on 2026-11-18 (rendered on Linux, with a fallback font instead of Segoe UI and Consolas).
+- `cargo test -p knurl-probe-app`: theme equals tokens, no colour outside the theme, the flow between the screens (send once, try again after a failure, never twice after success), the plain-words result, the step states, the request body (exactly what is shown), the too-long refusal, every relay answer read as sent or not sent.
+- The images of the snapshot example, looked at one by one on 2026-11-18, and the send states (11 to 16) on 2026-11-19 (rendered on Linux, with a fallback font instead of Segoe UI and Consolas).
 
 **Not verified**
 - The app on Windows: the real window, Segoe UI, scaling at 125-200 %, keyboard and screen reader use.
 - The check from the app on real headphones (the same code as `knurl-probe run`, itself not yet run on headphones since the move).
-- Sending (not in this version) and the Italian and Spanish texts (a later pull request).
+- Sending for real: the relay accepts `data` reports only after its deploy (bedrock-relay#7); until then it answers that the kind is unknown, which the app shows as "the server does not accept reports from Knurl Probe yet". The WinHTTP transport has not run on Windows.
+- The Italian and Spanish texts (a later pull request).

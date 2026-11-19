@@ -25,7 +25,7 @@ You need the headphones, a Windows 10 or 11 PC, and Rust until the first release
    cargo run -p knurl-probe -- draft reports\knurl-report-WH-1000XM6-1794960000.json --id sony-wh-1000xm6 --name "Sony WH-1000XM6"
    ```
    Review it: add a `note` where you know something the report cannot say.
-6. **Send it**: open a "New headphone model" issue with the report attached, or a pull request with the description in `headphones/` and the report attached. Say which Windows version you used.
+6. **Send it**: from the app, "Send" opens the issue for you (no GitHub account needed; "See what will be sent" shows exactly what leaves the PC). From the command line, open a "New headphone model" issue with the report attached, or a pull request with the description in `headphones/` and the report attached. Say which Windows version you used.
 
 ## What a report cannot tell
 - **MDR v2 models** (per public sources, the newer ones): the probe asks only which protocol they speak and records what they send, because nothing decodes the v2 answers yet. A report from one is still useful: it is the test data the decoder will be built on.
