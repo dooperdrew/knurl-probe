@@ -68,9 +68,12 @@ Da evitare: <styles or feelings the user dislikes>
 ## Vincoli
 - Marchio: <logo, mandatory colors, fonts, or "da creare">
 - Stack: <framework and styling, from the repo>
-- Dispositivi: <mobile first? desktop app? widths that matter>
+- Dispositivi: <mobile first? touch, mouse or keyboard? (widths go in Superfici)>
 - Accessibilità: WCAG 2.x AA (testo >= 4.5:1, bordi e icone >= 3:1)
 - Contenuti: <real texts and images available; the rest stays [placeholder]>
+
+## Superfici
+- <surface: phone app (iOS, Android), web app, desktop app, marketing site...>: <widths and themes it is shown at>
 
 ## Schermate chiave
 1. <screen>: <goal>
@@ -78,27 +81,30 @@ Da evitare: <styles or feelings the user dislikes>
 3. <screen>: <goal>
 ```
 
-Gaps stay marked `[da decidere]`, never invented. **Gate:** the user approves the brief.
+Superfici lists every place the product is used or shown, each with its widths. Ask about the ones the user did not name, because they are the ones forgotten later: a phone app usually also has a website, a website has a phone width, an app with accounts may have a web version. Directions and rounds are planned from this list. In automatic mode, take the surfaces from the repo (code, docs, earlier proposals) and mark the uncertain ones `[da decidere]`.
+
+Gaps stay marked `[da decidere]`, never invented. **Gate:** the user approves the brief, Superfici included.
 
 ## Phase 2: Three directions
 
 Make three really different directions, not three shades of one. For each:
 - one static HTML page with the most important key screen, in `design/directions/<a|b|c>.html`, self-contained (inline CSS, no build), using real content from the brief;
-- at the top of the file, a comment with a 3-line rationale: the idea, why it fits the brief, the risk it takes.
+- at the top of the file, a comment with a 3-line rationale: the idea, why it fits the brief, the risk it takes;
+- the key screen on every surface of the brief's Superfici (one frame per surface is enough), or a line on the page saying which surface it leaves out and why. Frames wider than the viewport are scaled down to fit or stacked, so the page itself never scrolls sideways at 375 px.
 
 Each direction must respect the brief's constraints; frontend-design deliberately takes an aesthetic risk, so check it against the brand before showing. Then:
-- screenshot each at 375 px and 1280 px (browser pane or a headless browser), also for a desktop app, because the pages are reviewed on the phone; for a desktop app add the real window size from the brief. Fix cut text, overlaps, horizontal scroll and contrast before showing. Horizontal scroll is measured, not eyeballed: at 375 px `document.documentElement.scrollWidth` must not exceed `innerWidth`. A common cause is a grid column of `1fr` holding a wide child: use `minmax(0, 1fr)`;
+- screenshot each at 375 px and 1280 px (browser pane or a headless browser), also for a desktop app, because the pages are reviewed on the phone; for a desktop app add the real window size from Superfici. Fix cut text, overlaps, horizontal scroll and contrast before showing. Horizontal scroll is measured, not eyeballed: at 375 px `document.documentElement.scrollWidth` must not exceed `innerWidth`. A common cause is a grid column of `1fr` holding a wide child: use `minmax(0, 1fr)`;
 - when the Artifact tool is available, publish each as a private page so the user can compare them from the phone, and write the links in FLOW.md.
 
 **Gate:** the user picks one direction (or asks for a mix: then make that as direction d and ask again).
 
 ## Phase 3: Iteration
 
-Rounds on the chosen direction, extended to the other key screens:
+Rounds on the chosen direction, extended to the other key screens on every surface of the brief. Before a round, write in FLOW.md which screens on which surfaces it will produce, so a missing surface shows before the user has to point it out.
 1. apply the user's feedback (screenshots they send count as feedback);
 2. run `impeccable` critique and audit, fix what is blocking, list the rest. Write which parts really ran (detector, critique with its separate sub-agents, or the checklist by hand). A detector finding is dismissed only with the evidence that contradicts it, written in FLOW.md: the contrast measured in the browser, the padding in px, or the reference line that sets a brand colour (the reference wins over the detector's taste rules);
 3. measure contrast of every text/background pair and write the ratios;
-4. screenshot at 375 and 1280 px, check for defects, republish;
+4. screenshot at 375 and 1280 px and at the widths of each surface in Superfici, in each theme it lists, check for defects, republish;
 5. commit with a message naming the round, log the round in FLOW.md.
 
 **Gate:** no blocking audit finding, all ratios pass, and the user says it is right.

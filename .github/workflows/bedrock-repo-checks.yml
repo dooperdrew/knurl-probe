@@ -150,12 +150,13 @@ jobs:
             while IFS= read -r f; do
               name="${f#"$d"/}"
               case "$name" in */*) continue ;; esac
-              case "$name" in LICENSE* | LICENCE* | COPYING*) licence="$f" ;; esac
+              # Font licences ship as OFL.txt or OFL-1.1.txt (lesson dooperdrew/bedrock#139).
+              case "$name" in LICENSE* | LICENCE* | COPYING* | UNLICENSE* | OFL*) licence="$f" ;; esac
             done <<< "$files"
             if [ -n "$licence" ]; then
               echo "$d: licence $licence"
             else
-              echo "::error file=.bedrock.yml::vendored folder \"$d\" has no licence file (LICENSE*, LICENCE* or COPYING*) at its top level"; failed=1
+              echo "::error file=.bedrock.yml::vendored folder \"$d\" has no licence file (LICENSE*, LICENCE*, COPYING*, UNLICENSE* or OFL*) at its top level"; failed=1
             fi
           done
           if [ "$failed" = 0 ] && [ "$checked" = 0 ]; then echo "No vendored folders declared in .bedrock.yml: nothing to check."; fi
@@ -177,9 +178,29 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/hosted-jobs-guarded.mjs"
 
+      - name: no committed link points outside the repo
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/committed-links.mjs"
+
       - name: local HTTP servers check the Host header
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/local-server-host.mjs"
+
+      - name: no-referrer does not break Origin checks
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/origin-referrer.mjs"
+
+      - name: managed files are committed, not ignored
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/managed-committed.mjs"
+
+      - name: optional kit parts match .bedrock.yml
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/kit-parts-kept.mjs"
+
+      - name: check-run permissions
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/checks-permission.mjs"
 
       - name: managed files change only in the bedrock sync PR
         shell: bash

@@ -7,7 +7,16 @@
 // variables, BEDROCK_HOSTED (off = no hosted minutes) or BEDROCK_RUNNER (set = the PC
 // runner), so that it is skipped instead. Lesson dooperdrew/bedrock#100.
 //
-// Jobs whose runs-on is an expression (the BEDROCK_RUNNER pattern) are not checked here.
+// A runs-on expression (the BEDROCK_RUNNER pattern) that can still resolve to a quoted
+// GitHub-hosted label, as the fallback for Dependabot PRs or when BEDROCK_RUNNER is unset,
+// needs a job-level if: that reads vars.BEDROCK_HOSTED: BEDROCK_RUNNER alone does not stop a
+// Dependabot PR from reaching the hosted fallback (rule ci-dependabot-fallback-explicit,
+// lesson dooperdrew/bedrock#135); an if: that admits only PRs opened by the repo owner also
+// counts (the match is loose, like GUARD: it looks for the variable, not its polarity). Only
+// workflows Dependabot can start are checked for this (pull requests, a push not
+// limited to named branches, reusable workflows), and an expression with no quoted hosted
+// label is not. Whether the expression also keeps Dependabot off the PC runner is checked only
+// on bedrock's own workflows (tooling tests), not here.
 // No YAML parser (consumers may have no node_modules): jobs are read line by line.
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -15,6 +24,10 @@ import { fileURLToPath } from "node:url";
 
 const HOSTED = /^(ubuntu|windows|macos)-[\w.-]+$/;
 const GUARD = /\bvars\.BEDROCK_(HOSTED|RUNNER)\b/;
+// A job that runs only for PRs opened by the repo owner never gets a Dependabot PR either.
+const HOSTED_GUARD =
+  /\bvars\.BEDROCK_HOSTED\b|\bpull_request\.user\.login\s*==\s*github\.repository_owner\b|\bgithub\.repository_owner\s*==\s*github\.event\.pull_request\.user\.login\b/;
+const QUOTED_HOSTED = /['"]((?:ubuntu|windows|macos)-[\w.-]+)['"]/;
 
 const indentOf = (l) => l.length - l.trimStart().length;
 const isBlank = (l) => l.trim() === "" || l.trim().startsWith("#");
@@ -36,12 +49,41 @@ function hostedLabels(value) {
   return items.filter((x) => HOSTED.test(x));
 }
 
-/** Jobs with a literal GitHub-hosted runs-on and no runner-variable guard: [{ job, line, label }]. */
+/**
+ * True when Dependabot can start the workflow: on pull requests, on a push that is not limited
+ * to named branches (Dependabot pushes dependabot/** branches), or as a reusable workflow
+ * (a PR workflow may call it).
+ */
+export function runsOnPullRequests(text) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const start = lines.findIndex((l) => /^['"]?on['"]?:/.test(l));
+  if (start === -1) return false;
+  let block = lines[start].replace(/^['"]?on['"]?:/, "");
+  for (let i = start + 1; i < lines.length && (isBlank(lines[i]) || indentOf(lines[i]) > 0); i++)
+    if (!isBlank(lines[i])) block += `\n${lines[i]}`;
+  block = block.replace(/#.*$/gm, "");
+  if (/\b(pull_request\w*|workflow_call|workflow_run)\b/.test(block)) return true;
+  if (!/\bpush\b/.test(block)) return false;
+  // A push limited to branches (branches:) or to tags only never runs for dependabot/** branches.
+  const push = /(^|\n)([ \t]*)push:(.*)((\n\2[ \t]+.*)*)/.exec(block);
+  if (!push) return true; // on: push or on: [push, ...]
+  const filter = push[3] + push[4];
+  // branches: ['**'] or a dependabot/ pattern still matches Dependabot's branches.
+  if (/\bbranches:/.test(filter)) return /['"]?\*\*['"]?|dependabot/.test(filter);
+  return !/\btags:/.test(filter);
+}
+
+/**
+ * Jobs that can land on a GitHub-hosted runner without a guard: [{ job, line, label, expression }].
+ * A literal hosted runs-on needs an if: on BEDROCK_HOSTED or BEDROCK_RUNNER; an expression with a
+ * quoted hosted fallback needs an if: on BEDROCK_HOSTED.
+ */
 export function unguardedHostedJobs(text) {
   const lines = text.replace(/\r/g, "").split("\n");
   const start = lines.findIndex((l) => /^jobs:\s*(#.*)?$/.test(l));
   if (start === -1) return [];
   const found = [];
+  const onPullRequests = runsOnPullRequests(text);
   let jobIndent = -1;
   let i = start + 1;
   while (i < lines.length) {
@@ -82,7 +124,15 @@ export function unguardedHostedJobs(text) {
       else
         runsOn = { value: value.replace(/^\s*-\s*/, "").replace(/\s+-\s+/g, ","), line: i + 2 + k };
     }
-    if (runsOn) {
+    if (runsOn?.value.includes("${{")) {
+      if (!onPullRequests) {
+        i = end;
+        continue;
+      }
+      const fallback = QUOTED_HOSTED.exec(runsOn.value);
+      if (fallback && !HOSTED_GUARD.test(cond))
+        found.push({ job, line: runsOn.line, label: fallback[1], expression: true });
+    } else if (runsOn) {
       const v = runsOn.value.trim();
       const listed = /^[\w.-]+(,[\w.-]+)+$/.test(v) ? `[${v}]` : v;
       const labels = hostedLabels(listed);
@@ -106,6 +156,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   let failed = 0;
   for (const f of files) {
     for (const j of unguardedHostedJobs(readFileSync(join(dir, f), "utf8"))) {
+      if (j.expression) {
+        console.log(
+          `::error file=${dir}/${f},line=${j.line}::job "${j.job}" falls back to GitHub-hosted ${j.label} (Dependabot PRs, or no BEDROCK_RUNNER): without hosted minutes it fails without running. Give it "if: \${{ !((github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') && vars.BEDROCK_HOSTED == 'off') }}" (with an existing if:, join both with &&) so it is skipped (rule ci-dependabot-fallback-explicit)`,
+        );
+        failed = 1;
+        continue;
+      }
       console.log(
         `::error file=${dir}/${f},line=${j.line}::job "${j.job}" runs only on GitHub-hosted ${j.label}: without hosted minutes it fails without running. Add to its if: "vars.BEDROCK_HOSTED != 'off'" (or a BEDROCK_RUNNER condition) so it is skipped, and say in the PR what it did not verify`,
       );

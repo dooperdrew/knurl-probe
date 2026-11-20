@@ -1,11 +1,12 @@
 # bedrock kit configuration. Edit "stacks", "adapters", "design" (path of the design reference), "docs" (modules, skill bedrock-docs) and "vendored" (folders of third-party files); bedrock sync writes the rest.
-bedrock: 0.20.3
+bedrock: 0.21.0
 stacks:
   - rust
-design: design/README.md
 adapters:
   - claude
-docs: [core, hardware]
+docs:
+  - core
+  - hardware
 managed:
   - .claude/bedrock/cloud-skills.json
   - .claude/bedrock/install-skills.mjs
@@ -16,13 +17,18 @@ managed:
   - .claude/skills/bedrock-lesson/SKILL.md
   - .claude/skills/brandkit/SKILL.md
   - .claude/skills/design-flow/SKILL.md
+  - .github/bedrock/checks-permission.mjs
+  - .github/bedrock/committed-links.mjs
   - .github/bedrock/docs-index.mjs
   - .github/bedrock/hosted-jobs-guarded.mjs
   - .github/bedrock/install-linters.sh
+  - .github/bedrock/kit-parts-kept.mjs
   - .github/bedrock/local-server-host.mjs
+  - .github/bedrock/managed-committed.mjs
   - .github/bedrock/managed-via-sync.mjs
   - .github/bedrock/migration-numbers.mjs
   - .github/bedrock/node-test-args.mjs
+  - .github/bedrock/origin-referrer.mjs
   - .github/bedrock/workflow-scripts-short.mjs
   - .github/workflows/bedrock-actions-lint.yml
   - .github/workflows/bedrock-docs.yml
@@ -30,6 +36,7 @@ managed:
   - .github/workflows/bedrock-rust-ci.yml
   - .github/workflows/bedrock.yml
   - .github/zizmor.yml
+design: design/README.md
 seeded:
   - .gitattributes
   - .github/ISSUE_TEMPLATE/bug.yml

@@ -32,10 +32,14 @@ export function hostProblem(text) {
   return "creates an HTTP server but never reads the Host header";
 }
 
+/** True for a test, a fixture, build output or a file in a vendored folder. */
+export function skipped(file, vendored = []) {
+  return SKIP.test(file) || vendored.some((d) => file.startsWith(d.replace(/\/+$/, "") + "/"));
+}
+
 /** Paths to check among tracked files, minus tests, fixtures and the vendored folders. */
 export function candidates(files, vendored = []) {
-  const v = vendored.map((d) => d.replace(/\/+$/, "") + "/");
-  return files.filter((f) => SOURCE.test(f) && !SKIP.test(f) && !v.some((d) => f.startsWith(d)));
+  return files.filter((f) => SOURCE.test(f) && !skipped(f, vendored));
 }
 
 /** The `vendored:` list of .bedrock.yml, read without a YAML parser. */
