@@ -81,6 +81,8 @@ Da evitare: <styles or feelings the user dislikes>
 3. <screen>: <goal>
 ```
 
+Schermate chiave includes the screens where the user acts (forms, settings, confirmations), not only the ones that show data; the success and error states of an action can be shown on its screen rather than as separate screens.
+
 Superfici lists every place the product is used or shown, each with its widths. Ask about the ones the user did not name, because they are the ones forgotten later: a phone app usually also has a website, a website has a phone width, an app with accounts may have a web version. Directions and rounds are planned from this list. In automatic mode, take the surfaces from the repo (code, docs, earlier proposals) and mark the uncertain ones `[da decidere]`.
 
 Gaps stay marked `[da decidere]`, never invented. **Gate:** the user approves the brief, Superfici included.
@@ -100,14 +102,14 @@ Each direction must respect the brief's constraints; frontend-design deliberatel
 
 ## Phase 3: Iteration
 
-Rounds on the chosen direction, extended to the other key screens on every surface of the brief. Before a round, write in FLOW.md which screens on which surfaces it will produce, so a missing surface shows before the user has to point it out.
+Rounds on the chosen direction, extended to the other key screens on every surface of the brief, the screens where the user acts included. Before a round, write in FLOW.md which screens on which surfaces it will produce, and which key screens are still undrawn after it, so a missing surface or a missing action shows before the user has to point it out.
 1. apply the user's feedback (screenshots they send count as feedback);
 2. run `impeccable` critique and audit, fix what is blocking, list the rest. Write which parts really ran (detector, critique with its separate sub-agents, or the checklist by hand). A detector finding is dismissed only with the evidence that contradicts it, written in FLOW.md: the contrast measured in the browser, the padding in px, or the reference line that sets a brand colour (the reference wins over the detector's taste rules);
 3. measure contrast of every text/background pair and write the ratios;
 4. screenshot at 375 and 1280 px and at the widths of each surface in Superfici, in each theme it lists, check for defects, republish;
 5. commit with a message naming the round, log the round in FLOW.md.
 
-**Gate:** no blocking audit finding, all ratios pass, and the user says it is right.
+**Gate:** every key screen of the brief is drawn on every surface (or FLOW.md says why a screen or surface is left out), no blocking audit finding, all ratios pass, and the user says it is right.
 
 ## Phase 4: Lock the design
 

@@ -23,7 +23,7 @@
 // The index groups docs by type, draws a map, and lists the topics that the
 // modules declared in .bedrock.yml ("docs: [core, app, ...]") expect but no doc covers yet.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -555,6 +555,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const { path, existing, next } = buildIndex(root);
     if (existing?.replace(/\r\n/g, "\n") === next) console.log("docs/README.md is up to date");
     else {
+      // A repo that turns docs modules on before it has any doc has no docs/ yet (#151).
+      mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, next);
       console.log("wrote docs/README.md");
     }
