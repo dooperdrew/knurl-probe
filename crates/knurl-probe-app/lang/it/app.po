@@ -123,3 +123,15 @@ msgstr "non c'è nessun report da inviare"
 
 msgid "too many reports were sent in the last hour: try again later"
 msgstr "nell'ultima ora sono stati inviati troppi report: riprova più tardi"
+
+msgid "internal error: {e}"
+msgstr "errore interno: {e}"
+
+msgid "Knurl Probe stopped: {e}"
+msgstr "Knurl Probe si è fermato: {e}"
+
+msgid "Could not open {target}: {e}"
+msgstr "Non è stato possibile aprire {target}: {e}"
+
+msgid "Could not open the folder: {e}"
+msgstr "Non è stato possibile aprire la cartella: {e}"

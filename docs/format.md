@@ -49,7 +49,7 @@ Written by Knurl Probe (the app) and by `knurl-probe-cli run`. One file per chec
 
 | Field | Meaning |
 |---|---|
-| `services` | For each Sony service: `opened`, `not_offered`, `not_tried`, or `failed` with a `reason` |
+| `services` | For each Sony service: `opened`; `not_offered` (Windows lists it for the other service only, or a device found by its Sony name could not open it); `not_tried` (found by name, and MDR v1 already answered); or `failed` with a `reason` |
 | `answers` | What the headphones answered on MDR v1, decoded; empty on MDR v2, which nothing decodes yet |
 | `verdict` | `supported` (a description ships in `headphones/`), `new_model`, `not_decoded` (only MDR v2 answered), `nothing_read` |
 | `frames` | Every frame in both directions, the raw truth behind `answers` |

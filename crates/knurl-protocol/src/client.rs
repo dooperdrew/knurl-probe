@@ -96,8 +96,10 @@ pub struct Client {
     last_battery_request: Option<u64>,
     /// The request on the wire and how many retries it has left.
     in_flight: Option<(Request, u8)>,
-    /// Retries left for the request put back at the front of the queue.
-    retries_override: Option<u8>,
+    /// A request put back at the front of the queue and the retries it has
+    /// left. Kept with the request: an alert answer that jumps ahead of it
+    /// must not take its count (audit 2026-11-21, M2).
+    retries_override: Option<(Request, u8)>,
 }
 
 impl Client {
@@ -235,7 +237,7 @@ impl Client {
                         (Outcome::Answered, _) => {}
                         (Outcome::NoReply, Some((request, left))) if left > 0 => {
                             self.queue.push_front(request);
-                            self.retries_override = Some(left - 1);
+                            self.retries_override = Some((request, left - 1));
                         }
                         _ => out.push(ClientEvent::RequestFailed { opcode, outcome }),
                     }
@@ -264,7 +266,14 @@ impl Client {
         };
         match sent {
             Ok(wire) => {
-                let left = self.retries_override.take().unwrap_or(NO_REPLY_RETRIES);
+                let left = match self.retries_override.take() {
+                    Some((retried, left)) if retried == request => left,
+                    other => {
+                        // Another request went first: the retry keeps its count.
+                        self.retries_override = other;
+                        NO_REPLY_RETRIES
+                    }
+                };
                 self.in_flight = Some((request, left));
                 out.push(ClientEvent::Send(wire));
             }
@@ -418,6 +427,21 @@ mod tests {
         assert!(out.contains(&ClientEvent::ProtocolError(
             "opcode 0x11: expected 4 bytes, got 3 (payload 11 00 64)".into()
         )));
+    }
+
+    #[test]
+    fn an_alert_answer_ahead_of_a_retry_does_not_take_its_count() {
+        let mut c = idle_xm3_client();
+        // Battery timed out and is back at the front with no retry left.
+        c.queue.push_back(Request::Battery);
+        c.retries_override = Some((Request::Battery, 0));
+        let answer = Request::AnswerAlert {
+            message: 0x01,
+            yes: true,
+        };
+        c.command(answer, 0);
+        assert_eq!(c.in_flight, Some((answer, NO_REPLY_RETRIES)));
+        assert_eq!(c.retries_override, Some((Request::Battery, 0)));
     }
 
     fn idle_xm3_client() -> Client {

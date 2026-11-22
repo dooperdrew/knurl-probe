@@ -69,6 +69,8 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 - **2026-11-19, English, Italian and Spanish, as Knurl.** The same system as the Knurl app: Rust texts through `t!` with `lang/<code>/app.po`, the window's texts through `@tr` with `lang/<code>/LC_MESSAGES/knurl-probe-app.po` bundled in the exe; shared terms worded as in Knurl (Indietro/Atrás, Invia/Enviar, Come Windows/Como Windows, Apri le impostazioni Bluetooth). The choice is on the welcome screen, "Same as Windows" first; the language names are never translated, so a person finds theirs. It is not saved: the app is used once and starts in Windows' language. The report and the relay's message stay in English (they are read by developers on GitHub); "a report" is "il report" and "el informe".
 - **2026-11-19, See what will be sent as a link.** Three buttons did not fit in one row in Spanish while sending ("Enviando..."): Send and Save stay buttons, the data toggle becomes a link like the issue form's. The "What was read" labels column is 150 px, for "Funciones declaradas".
 
+- **2026-11-22, Choose and Result scroll** (audit of 2026-11-21): the device list and the facts and problems sit in a `ScrollView` and the buttons stay under it, so the fixed 440 x 660 window never pushes them out. With nothing read, "Check again" is the primary button and "Next" the secondary. Errors opening a page or the folder show in a message box (the app has no error line outside its screens). Not yet seen on Windows.
+
 ## 6. Verified and not verified
 **Verified**
 - `python design/contrast.py`: 60 pairs, light and dark, none under its minimum.

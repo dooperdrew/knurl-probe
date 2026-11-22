@@ -17,7 +17,9 @@ use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{
     FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
 };
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows::Win32::UI::WindowsAndMessaging::{
+    MB_ICONERROR, MB_ICONWARNING, MB_OK, MESSAGEBOX_STYLE, MessageBoxW, SW_SHOWNORMAL,
+};
 use windows::core::{HSTRING, w};
 
 struct App {
@@ -61,7 +63,7 @@ pub fn run() -> Result<(), slint::PlatformError> {
             _ => None,
         });
         if let Some(n) = issue {
-            let _ = shell_open(&HSTRING::from(send::issue_url(n)));
+            open_or_say(&send::issue_url(n));
         }
     });
     ui.on_save(|| {
@@ -69,12 +71,8 @@ pub fn run() -> Result<(), slint::PlatformError> {
         dispatch(Event::Saved(result));
     });
     ui.on_show_in_folder(show_in_folder);
-    ui.on_open_bluetooth_settings(|| {
-        let _ = shell_open(&HSTRING::from("ms-settings:bluetooth"));
-    });
-    ui.on_open_issue_form(|| {
-        let _ = shell_open(&HSTRING::from(ISSUE_FORM));
-    });
+    ui.on_open_bluetooth_settings(|| open_or_say("ms-settings:bluetooth"));
+    ui.on_open_issue_form(|| open_or_say(ISSUE_FORM));
 
     let flow = Flow::default();
     view::apply(&ui, &flow);
@@ -136,9 +134,48 @@ fn dispatch(event: Event) {
     }
 }
 
+/// The text of a caught panic.
+pub fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(ToString::to_string)
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown panic".into())
+}
+
+/// Runs a worker's job; a panic becomes an error text, so the screen that
+/// waits for the answer ("Searching...", "Checking...", "Sending...") gets
+/// one instead of waiting forever.
+fn guarded<T>(job: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
+        .map_err(|panic| t!("internal error: {e}", e = panic_text(&*panic)))
+}
+
+fn message_box(text: &str, style: MESSAGEBOX_STYLE) {
+    let title = HSTRING::from("Knurl Probe");
+    let text = HSTRING::from(text);
+    // SAFETY: NUL-terminated strings that outlive the call; no owner window.
+    unsafe { MessageBoxW(None, &text, &title, style | MB_OK) };
+}
+
+/// The app cannot go on: said in a box (there is no console in release).
+pub fn fatal(text: &str) {
+    message_box(&t!("Knurl Probe stopped: {e}", e = text), MB_ICONERROR);
+}
+
+/// Opens a page; a failure is said, not ignored.
+fn open_or_say(target: &str) {
+    if let Err(e) = shell_open(&HSTRING::from(target)) {
+        message_box(
+            &t!("Could not open {target}: {e}", target = target, e = e),
+            MB_ICONWARNING,
+        );
+    }
+}
+
 fn spawn_search() {
     std::thread::spawn(|| {
-        let found = check::find_headphones();
+        let found = guarded(check::find_headphones).and_then(|r| r);
         // If the window has closed there is nobody to tell.
         let _ = slint::invoke_from_event_loop(move || {
             let names = match &found {
@@ -165,9 +202,13 @@ fn spawn_check(index: usize) {
         return;
     };
     std::thread::spawn(move || {
-        let report = check::run(&target, |step| {
-            let _ = slint::invoke_from_event_loop(move || dispatch(Event::Progress(step)));
-        });
+        let name = target.name.clone();
+        let report = guarded(|| {
+            check::run(&target, |step| {
+                let _ = slint::invoke_from_event_loop(move || dispatch(Event::Progress(step)));
+            })
+        })
+        .unwrap_or_else(|problem| failed_check(&name, problem));
         let _ = slint::invoke_from_event_loop(move || dispatch(Event::Checked(Box::new(report))));
     });
 }
@@ -182,7 +223,7 @@ fn spawn_send() {
         return;
     };
     std::thread::spawn(move || {
-        let outcome = match send::relay_config() {
+        let outcome = guarded(|| match send::relay_config() {
             Ok(config) => send::send(
                 &crate::winhttp::WinHttp,
                 &config,
@@ -190,13 +231,31 @@ fn spawn_send() {
                 env!("CARGO_PKG_VERSION"),
             ),
             Err(reason) => send::Outcome::NotSent(reason),
-        };
+        })
+        .unwrap_or_else(send::Outcome::NotSent);
         let result = match outcome {
             send::Outcome::Sent { issue } => Ok(issue),
             send::Outcome::NotSent(reason) => Err(reason),
         };
         let _ = slint::invoke_from_event_loop(move || dispatch(Event::SendDone(result)));
     });
+}
+
+/// The report of a check that stopped on an internal error: nothing read,
+/// and the error in its problems, so the result screen says it.
+fn failed_check(name: &str, problem: String) -> knurl_report::Report {
+    knurl_report::build(knurl_report::ReportInput {
+        tool: knurl_probe::TOOL,
+        date: &knurl_report::date_from_unix(check::now_secs()),
+        os: &check::os_version(),
+        windows_name: name,
+        services: knurl_report::Services {
+            v1: knurl_report::ServiceResult::NotTried,
+            v2: knurl_report::ServiceResult::NotTried,
+        },
+        outcomes: Vec::new(),
+        problems: vec![problem],
+    })
 }
 
 /// The user's Documents folder (wherever Windows keeps it, OneDrive too).
@@ -238,10 +297,12 @@ fn show_in_folder() {
         Some(Ok(path)) => Some(path),
         _ => None,
     });
-    if let Some(path) = saved {
-        let _ = std::process::Command::new("explorer.exe")
+    if let Some(path) = saved
+        && let Err(e) = std::process::Command::new("explorer.exe")
             .arg(format!("/select,{path}"))
-            .spawn();
+            .spawn()
+    {
+        message_box(&t!("Could not open the folder: {e}", e = e), MB_ICONWARNING);
     }
 }
 

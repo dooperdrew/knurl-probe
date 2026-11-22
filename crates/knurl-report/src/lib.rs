@@ -267,6 +267,8 @@ pub struct Collector {
     started_at: u64,
     v2_sent_at: Option<u64>,
     problems: Vec<String>,
+    /// A well-formed frame came back (noise and broken frames do not count).
+    answered: bool,
 }
 
 impl Collector {
@@ -280,6 +282,7 @@ impl Collector {
             started_at: 0,
             v2_sent_at: None,
             problems: Vec::new(),
+            answered: false,
         }
     }
 
@@ -347,9 +350,11 @@ impl Collector {
     pub fn receive(&mut self, bytes: &[u8], now: u64) -> Vec<u8> {
         for event in self.rx.push(bytes) {
             let wire = match event {
-                ReadEvent::Frame { wire, .. }
-                | ReadEvent::Invalid { wire, .. }
-                | ReadEvent::Discarded(wire) => wire,
+                ReadEvent::Frame { wire, .. } => {
+                    self.answered = true;
+                    wire
+                }
+                ReadEvent::Invalid { wire, .. } | ReadEvent::Discarded(wire) => wire,
             };
             self.frames.push(FrameRecord {
                 t_ms: now.saturating_sub(self.started_at),
@@ -420,6 +425,7 @@ impl Collector {
             },
             frames: self.frames,
             problems: self.problems,
+            answered: self.answered,
         }
     }
 }
@@ -431,6 +437,9 @@ pub struct Outcome {
     pub answers: Answers,
     pub frames: Vec<FrameRecord>,
     pub problems: Vec<String>,
+    /// At least one well-formed frame was received. Bytes that are not a
+    /// frame are kept in `frames` (as "rx") but do not count as an answer.
+    pub answered: bool,
 }
 
 /// Builds the report from what Windows offered and what each service gave.
@@ -454,7 +463,7 @@ pub fn build(input: ReportInput<'_>) -> Report {
     for outcome in input.outcomes {
         if outcome.service == Service::V1 {
             answers = outcome.answers;
-        } else if outcome.frames.iter().any(|f| f.dir == "rx") {
+        } else if outcome.answered {
             v2_answered = true;
         }
         frames.extend(outcome.frames);
@@ -650,6 +659,7 @@ mod tests {
                 Vec::new()
             },
             problems: Vec::new(),
+            answered: rx,
         };
         assert_eq!(build(base(vec![v2(true)])).verdict, Verdict::NotDecoded);
         assert_eq!(build(base(vec![v2(false)])).verdict, Verdict::NothingRead);
@@ -661,12 +671,23 @@ mod tests {
             },
             frames: Vec::new(),
             problems: Vec::new(),
+            answered: true,
         };
         let report = build(base(vec![new_model]));
         assert_eq!(report.verdict, Verdict::NewModel);
         // A renamed device never reaches the report.
         assert_eq!(report.device_name, RENAMED);
         assert!(!report.to_json().contains("My phones"));
+    }
+
+    #[test]
+    fn noise_on_v2_is_recorded_but_is_not_an_answer() {
+        let mut c = Collector::new(Service::V2);
+        c.start(0);
+        c.receive(&[0x00, 0x11, 0x22], 5);
+        let outcome = c.finish();
+        assert!(outcome.frames.iter().any(|f| f.dir == "rx"));
+        assert!(!outcome.answered);
     }
 
     #[test]

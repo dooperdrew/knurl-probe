@@ -1,5 +1,6 @@
 # Rust build output (Cargo.lock is committed on purpose: this ships a binary)
-/target/
+/target
+__pycache__/
 
 # Captures from real headphones hold the device's Bluetooth address: keep raw dumps local
 /captures/raw/
@@ -7,7 +8,7 @@
 /reports/
 
 # Release zips built locally
-/dist/
+/dist
 
 # Local settings
 .claude/settings.local.json

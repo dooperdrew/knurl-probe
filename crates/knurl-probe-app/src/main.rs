@@ -12,9 +12,17 @@ mod windows_app;
 #[cfg(windows)]
 mod winhttp;
 
+/// Release builds have no console: a window that cannot open, or a panic on
+/// the window's thread, is said in a message box instead of a silent exit.
 #[cfg(windows)]
-fn main() -> Result<(), slint::PlatformError> {
-    windows_app::run()
+fn main() -> std::process::ExitCode {
+    let failure = match std::panic::catch_unwind(windows_app::run) {
+        Ok(Ok(())) => return std::process::ExitCode::SUCCESS,
+        Ok(Err(e)) => format!("the window could not open: {e}"),
+        Err(panic) => format!("internal error: {}", windows_app::panic_text(&*panic)),
+    };
+    windows_app::fatal(&failure);
+    std::process::ExitCode::FAILURE
 }
 
 #[cfg(not(windows))]

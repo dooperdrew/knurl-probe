@@ -6,6 +6,14 @@ What changed in each release of knurl-probe. The release workflow puts the secti
 
 Not released yet.
 
+Fixed after the audits of 2026-11-21 (not yet run on headphones):
+- **Finding the headphones:** `run` and the app also take the paired classic devices with a Sony model name and open their services with Winsock. WinRT lists no MDR service on the WH-1000XM3, so they found no headphones there. When such a device answers on MDR v1, MDR v2 is reported as `not_tried`.
+- **Windows version** read from the registry: `cmd /C ver` flashed a console from the app and was not read on Windows in Italian or Spanish.
+- **The app never hangs or vanishes:** a panic while searching, checking or sending becomes an error on that screen; a window that cannot open, or a panic, is said in a message box. Opening a page or the folder says when it fails.
+- **Choose and Result scroll**, with the buttons always in view; with nothing read, "Check again" is the primary button.
+- **Reports:** bytes on MDR v2 that are not a frame no longer count as an answer ("not decoded" became "nothing read").
+- **Protocol:** a request waiting for a retry keeps its own retry count when an alert answer goes first.
+
 - **The zip** `knurl-probe-0.1.0-windows-x64.zip`: `knurl-probe.exe` (the app, with the Knurl icon and its version information) and `knurl-probe-cli.exe` (the command line), both READMEs, both licences and the third-party notices for both exes, plus its SHA-256. `scripts/package.py` checks it (exact file list, each exe byte for byte, the app's version information, notices up to date, checksum); CI runs the same check on every pull request, and a release is built only from a commit on `main` whose checks passed.
 - The probe, the Sony MDR protocol and the Windows connection move here from the Knurl app's repository, with their history (`xmc-probe`, `xmc-protocol`, `xmc-device` there). Licensed MIT OR Apache-2.0.
 - `run` (now `knurl-probe-cli run`): checks one pair of headphones read-only and writes a report (JSON) to attach to an issue, with no Bluetooth address and no personal names (crate `knurl-report`, tested by replaying the WH-1000XM3 capture of 2026-11-07). When the model is described, it prints how the report compares.

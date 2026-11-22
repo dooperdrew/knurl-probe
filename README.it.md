@@ -13,6 +13,7 @@ Qui c'è anche il codice che Knurl usa per parlare con le cuffie: il protocollo 
 
 **Non ancora verificato:**
 - l'app su Windows: nessuno ha ancora guardato la sua finestra, e non ha controllato cuffie vere (il suo controllo è lo stesso codice di `knurl-probe-cli run`, che a sua volta non ha girato sulle cuffie dopo lo spostamento);
+- trovare le cuffie che WinRT non elenca (come la WH-1000XM3) dal nome Sony e aprirle con Winsock, aggiunto il 22/11/2026: provato con elenchi d'esempio, non sulle cuffie. Le cuffie rinominate in Windows e non elencate da WinRT non vengono trovate;
 - un invio vero dall'app (il relay accetta questi report solo dopo il suo prossimo deploy);
 - nessun altro modello, compresa la WH-1000XM4;
 - il secondo servizio Sony (MDR v2), che secondo le fonti pubbliche usano i modelli più recenti: il probe lo apre, ma ancora niente lo decodifica.

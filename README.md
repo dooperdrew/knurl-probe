@@ -13,6 +13,7 @@ This repository also holds the code Knurl uses to talk to the headphones: the pr
 
 **Not verified yet:**
 - the app on Windows: no person has looked at its window, and it has not checked real headphones (its check is the same code as `knurl-probe-cli run`, which has not run on headphones since the move either);
+- finding headphones that WinRT does not list (as the WH-1000XM3) by their Sony name and opening them with Winsock, added on 2026-11-22: tested with sample lists, not on headphones. Headphones renamed in Windows and not listed by WinRT are not found;
 - a real send from the app (the relay accepts these reports only after its next deploy);
 - any other model, the WH-1000XM4 included;
 - the second Sony service (MDR v2), which public sources say newer models use: the probe can open it but nothing decodes it yet.
