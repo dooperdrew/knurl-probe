@@ -164,10 +164,12 @@ fn strings(items: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
 
 /// What "See what will be sent" shows: the exact request body, or, when the
 /// report is over the relay's limit (nothing is sent then), the report itself.
+/// A report without the time of its check cannot be sent either; the app
+/// never has one (it sends only reports it has just made).
 pub fn sent_data(report: &Report, version: &str) -> (String, bool) {
     match send::request_body(report, version) {
         Ok(body) => (body, false),
-        Err(NotSendable::TooLong { .. }) => (report.to_json(), true),
+        Err(NotSendable::TooLong { .. } | NotSendable::NoTime) => (report.to_json(), true),
     }
 }
 
@@ -254,6 +256,7 @@ mod tests {
             format: REPORT_FORMAT,
             tool: "knurl-probe 0.1.0".into(),
             date: "2026-11-18".into(),
+            checked_at: "2026-11-18T10:00:00Z".into(),
             os: "Windows 10.0.26100".into(),
             device_name: RENAMED.into(),
             services: Services {
@@ -340,7 +343,7 @@ mod tests {
         assert!(!too_long);
         assert_eq!(shown, send::request_body(&r, "0.1.0").expect("body"));
         let mut long = report(Verdict::NewModel);
-        long.problems = vec!["x".repeat(send::MAX_ATTACHMENT)];
+        long.problems = vec!["x".repeat(send::MAX_REPORT)];
         let (shown, too_long) = sent_data(&long, "0.1.0");
         assert!(too_long);
         assert_eq!(shown, long.to_json());

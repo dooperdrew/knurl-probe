@@ -18,7 +18,7 @@ path = "src/main.rs"
 knurl-probe.workspace = true
 knurl-report.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 slint = "1.18"
 
 [dev-dependencies]

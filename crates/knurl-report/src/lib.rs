@@ -166,6 +166,11 @@ pub struct Report {
     pub tool: String,
     /// The day of the check, `YYYY-MM-DD` (UTC).
     pub date: String,
+    /// The time the check ended, `YYYY-MM-DDTHH:MM:SSZ` (UTC, to the second):
+    /// the `date` of the relay's probe envelope. Empty in reports written
+    /// before it existed, which still read.
+    #[serde(default)]
+    pub checked_at: String,
     /// For example "Windows 10.0.26100".
     pub os: String,
     /// The Windows device name if it is a Sony model name, else a fixed
@@ -448,6 +453,8 @@ pub struct ReportInput<'a> {
     pub tool: &'a str,
     /// `YYYY-MM-DD`, see [`date_from_unix`].
     pub date: &'a str,
+    /// `YYYY-MM-DDTHH:MM:SSZ`, see [`time_from_unix`].
+    pub checked_at: &'a str,
     pub os: &'a str,
     pub windows_name: &'a str,
     pub services: Services,
@@ -483,6 +490,7 @@ pub fn build(input: ReportInput<'_>) -> Report {
         format: REPORT_FORMAT,
         tool: input.tool.to_string(),
         date: input.date.to_string(),
+        checked_at: input.checked_at.to_string(),
         os: input.os.to_string(),
         device_name: sanitize_device_name(input.windows_name),
         services: input.services,
@@ -507,6 +515,19 @@ pub fn date_from_unix(secs: u64) -> String {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
     format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// `YYYY-MM-DDTHH:MM:SSZ` (UTC) of a time in seconds since 1970: ISO 8601
+/// with the zone, as the relay's probe envelope wants it.
+pub fn time_from_unix(secs: u64) -> String {
+    let rest = secs % 86_400;
+    format!(
+        "{}T{:02}:{:02}:{:02}Z",
+        date_from_unix(secs),
+        rest / 3600,
+        rest % 3600 / 60,
+        rest % 60
+    )
 }
 
 /// The report's file name: the model (or "headphones"), then the time in
@@ -601,10 +622,44 @@ mod tests {
     }
 
     #[test]
+    fn times_are_iso_8601_in_utc() {
+        assert_eq!(time_from_unix(0), "1970-01-01T00:00:00Z");
+        assert_eq!(time_from_unix(1_794_959_999), "2026-11-17T23:59:59Z");
+        assert_eq!(
+            time_from_unix(1_794_960_000 + 3_723),
+            "2026-11-18T01:02:03Z"
+        );
+    }
+
+    #[test]
+    fn a_report_without_checked_at_still_reads() {
+        let report = build(ReportInput {
+            tool: "knurl-probe 0.1.0",
+            date: "2026-11-18",
+            checked_at: "2026-11-18T10:00:00Z",
+            os: "Windows 10.0.26100",
+            windows_name: "WH-1000XM4",
+            services: Services {
+                v1: ServiceResult::NotOffered,
+                v2: ServiceResult::NotOffered,
+            },
+            outcomes: Vec::new(),
+            problems: Vec::new(),
+        });
+        let old = report
+            .to_json()
+            .replace("  \"checked_at\": \"2026-11-18T10:00:00Z\",\n", "");
+        assert!(!old.contains("checked_at"));
+        let read = Report::from_json(&old).expect("an older report");
+        assert_eq!(read.checked_at, "");
+    }
+
+    #[test]
     fn a_report_reads_back_what_it_wrote() {
         let report = build(ReportInput {
             tool: "knurl-probe 0.1.0",
             date: "2026-11-18",
+            checked_at: "2026-11-18T10:00:00Z",
             os: "Windows 10.0.26100",
             windows_name: "WH-1000XM4",
             services: Services {
@@ -637,6 +692,7 @@ mod tests {
         let base = |outcomes| ReportInput {
             tool: "knurl-probe 0.1.0",
             date: "2026-11-18",
+            checked_at: "2026-11-18T10:00:00Z",
             os: "Windows 10.0.26100",
             windows_name: "My phones",
             services: Services {
@@ -734,6 +790,7 @@ mod tests {
         let mut report = build(ReportInput {
             tool: "knurl-probe 0.1.0",
             date: "2026-11-18",
+            checked_at: "2026-11-18T10:00:00Z",
             os: "Windows",
             windows_name: "Alex's phones",
             services: Services {

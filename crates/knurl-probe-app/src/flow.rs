@@ -213,6 +213,7 @@ mod tests {
             format: REPORT_FORMAT,
             tool: "knurl-probe 0.1.0".into(),
             date: "2026-11-18".into(),
+            checked_at: "2026-11-18T10:00:00Z".into(),
             os: "Windows 10.0.26100".into(),
             device_name: model.into(),
             services: Services {

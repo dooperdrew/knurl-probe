@@ -41,6 +41,7 @@ fn xm3_report() -> knurl_report::Report {
     build(ReportInput {
         tool: "knurl-probe 0.1.0",
         date: "2026-11-07",
+        checked_at: "2026-11-07T10:00:00Z",
         os: "Windows 10.0.26100",
         windows_name: "WH-1000XM3",
         services: Services {
@@ -138,6 +139,7 @@ fn the_xm3_capture_becomes_a_supported_report() {
     let report = build(ReportInput {
         tool: "knurl-probe 0.1.0",
         date: "2026-11-07",
+        checked_at: "2026-11-07T10:00:00Z",
         os: "Windows 10.0.26100",
         windows_name: "WH-1000XM3",
         services: Services {

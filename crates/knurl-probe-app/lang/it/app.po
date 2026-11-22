@@ -135,3 +135,6 @@ msgstr "Non è stato possibile aprire {target}: {e}"
 
 msgid "Could not open the folder: {e}"
 msgstr "Non è stato possibile aprire la cartella: {e}"
+
+msgid "this report does not say when the check ran: run the check again"
+msgstr "questo report non dice quando è stato fatto il controllo: rifai il controllo"

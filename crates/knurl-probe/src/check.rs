@@ -311,9 +311,11 @@ pub fn run(target: &Headphones, mut progress: impl FnMut(CheckStep)) -> Report {
         try_service(target.v2, MDR_V2, Service::V2, "MDR v2")
     };
     progress(CheckStep::Finishing);
+    let now = now_secs();
     knurl_report::build(ReportInput {
         tool: TOOL,
-        date: &knurl_report::date_from_unix(now_secs()),
+        date: &knurl_report::date_from_unix(now),
+        checked_at: &knurl_report::time_from_unix(now),
         os: &os_version(),
         windows_name: &target.name,
         services: Services { v1, v2 },
