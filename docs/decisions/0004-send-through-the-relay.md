@@ -13,6 +13,8 @@ order: 40
 
 **Date.** 2026-11-18 (decided with the owner, #2) and 2026-11-19 (built, #9; relay side: DooperDrew/bedrock-relay#7).
 
+**Update, 2026-11-22.** The report now goes as a `probe` report, not a `data` attachment: [decision 0007](0007-send-as-a-probe-report.md). The rest of this decision (no GitHub account, the exact request shown first, every answer read as sent or not sent) stays.
+
 **Context.** Asking people to open a GitHub issue and attach a file loses most reports. Knurl already sends problem reports through the bedrock relay, a Cloudflare Worker that opens issues with a GitHub App, so no token ships in the app. But the relay's existing report kinds treat two reports with the same message as one: a "seen again" comment would replace the second report and lose its data. The fingerprint replaces every number, so even "WH-1000XM5" and "WH-1000XM6" would match.
 
 **Decision.**

@@ -24,6 +24,7 @@ Written by Knurl Probe (the app) and by `knurl-probe-cli run`. One file per chec
   "format": 1,
   "tool": "knurl-probe 0.1.0",
   "date": "2026-11-07",
+  "checked_at": "2026-11-07T10:42:05Z",
   "os": "Windows 10.0.26100",
   "device_name": "WH-1000XM3",
   "services": {
@@ -49,6 +50,7 @@ Written by Knurl Probe (the app) and by `knurl-probe-cli run`. One file per chec
 
 | Field | Meaning |
 |---|---|
+| `date`, `checked_at` | The day of the check, and the time it ended to the second, both in UTC (`checked_at` is missing in reports written before it existed) |
 | `services` | For each Sony service: `opened`; `not_offered` (Windows lists it for the other service only, or a device found by its Sony name could not open it); `not_tried` (found by name, and MDR v1 already answered); or `failed` with a `reason` |
 | `answers` | What the headphones answered on MDR v1, decoded; empty on MDR v2, which nothing decodes yet |
 | `verdict` | `supported` (a description ships in `headphones/`), `new_model`, `not_decoded` (only MDR v2 answered), `nothing_read` |
@@ -56,6 +58,31 @@ Written by Knurl Probe (the app) and by `knurl-probe-cli run`. One file per chec
 | `problems` | What went wrong, in plain words |
 
 A tool reads only reports whose `format` it knows; a newer one is refused with an error.
+
+### As sent to the relay
+Send wraps the report in the envelope the relay checks for a `probe` report ([decision 0007](decisions/0007-send-as-a-probe-report.md), bedrock-relay ADR-0003). The report is under `headphones`, exactly as saved:
+
+```json
+{
+  "probe": "knurl-probe",
+  "schema": 1,
+  "version": "0.1.0",
+  "date": "2026-11-07T10:42:05Z",
+  "steps": [
+    { "id": "service-v1", "outcome": "opened" },
+    { "id": "service-v2", "outcome": "not-offered" },
+    { "id": "protocol-version", "outcome": "arrived" }
+  ],
+  "headphones": { "format": 1, "tool": "knurl-probe 0.1.0" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `schema` | The report's `format` |
+| `version` | The app's version |
+| `date` | The report's `checked_at` |
+| `steps` | The two services (`opened`, `not-offered`, `not-tried`, `failed`), then each start-up question on MDR v1 (`protocol-version`, `model`, `firmware`, `functions`, `battery`, `noise`, `equalizer`): `arrived`, `silent` (the service opened, no answer) or `not-reached` (the service did not open) |
 
 ## The description (`headphones/<id>.toml`)
 

@@ -22,7 +22,7 @@ flowchart LR
     d5["Riferimenti del protocollo MDR<br/><i>MDR protocol references</i>"]
   end
   subgraph decision["Decisioni · Decisions"]
-    d6["6 documenti · documents"]
+    d6["7 documenti · documents"]
   end
   subgraph record["Diario e risultati · Records and results"]
     d7["Risultati sulla WH-1000XM3<br/><i>WH-1000XM3 results</i>"]
@@ -66,6 +66,7 @@ flowchart LR
 | [ADR-0004: Send through the bedrock relay as a data report](decisions/0004-send-through-the-relay.md)<br/><sub>ADR-0004: Invio tramite il relay di bedrock come report di tipo data</sub> | Send posts the report to the bedrock relay, which opens an issue here; no GitHub account, the exact request shown first.<br/><sub>Invia manda il report al relay di bedrock, che apre una issue qui; nessun account GitHub, e la richiesta esatta è mostrata prima.</sub> | attuale · current | — |
 | [ADR-0005: CI on the owner's runner, never for forks or Dependabot](decisions/0005-ci-on-the-owners-runner.md)<br/><sub>ADR-0005: CI sul runner del proprietario, mai per i fork e Dependabot</sub> | While the repository is private and the account has no hosted minutes, the Windows checks run on a self-hosted runner; forks and Dependabot always go to GitHub-hosted runners.<br/><sub>Finché il repository è privato e l'account non ha minuti, i controlli Windows girano su un runner self-hosted; fork e Dependabot vanno sempre sui runner di GitHub.</sub> | attuale · current | — |
 | [ADR-0006: The project uses the bedrock kit](decisions/0006-the-bedrock-kit.md)<br/><sub>ADR-0006: Il progetto usa il kit bedrock</sub> | Shared rules, checks and skills come from bedrock through sync PRs, as in every DooperDrew project.<br/><sub>Regole, controlli e skill comuni arrivano da bedrock con PR di sync, come in ogni progetto DooperDrew.</sub> | attuale · current | — |
+| [ADR-0007: Send as a probe report](decisions/0007-send-as-a-probe-report.md)<br/><sub>ADR-0007: Invio come report di tipo probe</sub> | Send posts the report as the relay's probe kind, a JSON object behind the envelope the probes share, instead of a data attachment.<br/><sub>Invia manda il report come tipo probe del relay, un oggetto JSON dietro l'intestazione comune alle sonde, invece che come allegato data.</sub> | attuale · current | — |
 
 ## Diario e risultati · Records and results
 

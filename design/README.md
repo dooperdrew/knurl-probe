@@ -70,6 +70,7 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 - **2026-11-19, See what will be sent as a link.** Three buttons did not fit in one row in Spanish while sending ("Enviando..."): Send and Save stay buttons, the data toggle becomes a link like the issue form's. The "What was read" labels column is 150 px, for "Funciones declaradas".
 
 - **2026-11-22, Choose and Result scroll** (audit of 2026-11-21): the device list and the facts and problems sit in a `ScrollView` and the buttons stay under it, so the fixed 440 x 660 window never pushes them out. With nothing read, "Check again" is the primary button and "Next" the secondary. Errors opening a page or the folder show in a message box (the app has no error line outside its screens). Not yet seen on Windows.
+- **2026-11-22, the report shown as JSON, not as a string.** Send now posts a `probe` report ([decision 0007](../docs/decisions/0007-send-as-a-probe-report.md)): the report is a JSON object inside the request, so "See what will be sent" shows it indented and readable, after the envelope (probe, schema, version, date, steps), instead of an escaped string. Still byte for byte what leaves the PC. The screens did not change; the send-state images were not rendered again.
 
 ## 6. Verified and not verified
 **Verified**
@@ -80,5 +81,5 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 **Not verified**
 - The app on Windows: the real window, Segoe UI, scaling at 125-200 %, keyboard and screen reader use.
 - The check from the app on real headphones (the same code as `knurl-probe-cli run`, itself not yet run on headphones since the move).
-- Sending for real: the relay accepts `data` reports only after its deploy (bedrock-relay#7); until then it answers that the kind is unknown, which the app shows as "the server does not accept reports from Knurl Probe yet". The WinHTTP transport has not run on Windows.
+- Sending for real: the relay accepts `probe` reports only after its deploy (bedrock-relay ADR-0003); until then it answers that the kind is unknown, which the app shows as "the server does not accept reports from Knurl Probe yet". The WinHTTP transport has not run on Windows.
 - The Italian and Spanish texts read by a native speaker; the language switch on Windows (only rendered here).

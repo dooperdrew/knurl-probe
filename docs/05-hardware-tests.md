@@ -56,9 +56,9 @@ Nothing else has run on headphones: not the app, not `knurl-probe-cli run`, not 
 2. The report and the message must not contain the new name; they say "(renamed by the user: not included)".
 3. Rename it back.
 
-### 5. Send (after the relay's deploy of `data` reports)
-1. On the Send screen, open "See what will be sent": it is the exact request, the report inside it.
-2. Press Send. Expect "Sent" with a link to a new issue in DooperDrew/knurl-probe, labelled `ap:new`, `src:user`, `data`, with the report attached.
+### 5. Send (after the relay's deploy of `probe` reports)
+1. On the Send screen, open "See what will be sent": it is the exact request, the report inside it under `headphones`.
+2. Press Send. Expect "Sent" with a link to a new issue in DooperDrew/knurl-probe titled `probe: knurl-probe <version> · Headphone report: <model>`, labelled `ap:new`, `src:user`, `probe`, `probe:knurl-probe`, with the envelope and the report in a `json` block.
 3. Before the deploy the app must say that the server does not accept reports yet. It must never say "Sent".
 4. Close the test issue.
 

@@ -244,9 +244,11 @@ fn spawn_send() {
 /// The report of a check that stopped on an internal error: nothing read,
 /// and the error in its problems, so the result screen says it.
 fn failed_check(name: &str, problem: String) -> knurl_report::Report {
+    let now = check::now_secs();
     knurl_report::build(knurl_report::ReportInput {
         tool: knurl_probe::TOOL,
-        date: &knurl_report::date_from_unix(check::now_secs()),
+        date: &knurl_report::date_from_unix(now),
+        checked_at: &knurl_report::time_from_unix(now),
         os: &check::os_version(),
         windows_name: name,
         services: knurl_report::Services {
