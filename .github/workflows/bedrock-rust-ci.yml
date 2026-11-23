@@ -28,12 +28,13 @@ permissions:
 jobs:
   rust:
     name: fmt / clippy / test
-    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
-    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
-    if: (github.event_name != 'push' || inputs.on-push) && !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off')
-    # Runner: Dependabot PRs (by actor or PR author) are quarantined on GitHub-hosted.
+    # Dependabot and fork PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable
+    # actor). Lessons dooperdrew/bedrock#97, #168, #173.
+    if: (github.event_name != 'push' || inputs.on-push) && !((github.event.pull_request.user.login == 'dependabot[bot]' || (github.event.pull_request.head.repo.full_name || github.repository) != github.repository) && vars.BEDROCK_HOSTED == 'off')
+    # Runner: Dependabot PRs (by actor or PR author) and fork PRs are quarantined on GitHub-hosted.
     # Otherwise the runs-on input, else the repo variable BEDROCK_RUNNER (JSON), else windows-latest.
-    runs-on: ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') && 'windows-latest' || (inputs.runs-on != '' && inputs.runs-on || fromJSON(vars.BEDROCK_RUNNER || '"windows-latest"')) }}
+    runs-on: ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]' || (github.event.pull_request.head.repo.full_name || github.repository) != github.repository) && 'windows-latest' || (inputs.runs-on != '' && inputs.runs-on || fromJSON(vars.BEDROCK_RUNNER || '"windows-latest"')) }}
     timeout-minutes: 30
     defaults:
       run:

@@ -34,7 +34,7 @@ export function hostProblem(text) {
 
 /** True for a test, a fixture, build output or a file in a vendored folder. */
 export function skipped(file, vendored = []) {
-  return SKIP.test(file) || vendored.some((d) => file.startsWith(d.replace(/\/+$/, "") + "/"));
+  return SKIP.test(file) || vendored.some((d) => file.startsWith(`${d.replace(/\/+$/, "")}/`));
 }
 
 /** Paths to check among tracked files, minus tests, fixtures and the vendored folders. */

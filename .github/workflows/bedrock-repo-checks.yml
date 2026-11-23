@@ -15,11 +15,12 @@ jobs:
   repo:
     name: repository hygiene
     # Runner: the repo variable BEDROCK_RUNNER (JSON, e.g. ["self-hosted","bedrock"]),
-    # GitHub-hosted otherwise. Dependabot PRs (by actor or PR author) always run on GitHub's runners.
-    # Dependabot PRs never use this PC's runner; with no hosted minutes (repo variable
-    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable actor). Lesson dooperdrew/bedrock#97.
-    if: ${{ !(github.event.pull_request.user.login == 'dependabot[bot]' && vars.BEDROCK_HOSTED == 'off') }}
-    runs-on: ${{ fromJSON(github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.BEDROCK_RUNNER || '"ubuntu-latest"') }}
+    # GitHub-hosted otherwise. Dependabot PRs (by actor or PR author) and fork PRs always run on GitHub's runners.
+    # Dependabot and fork PRs never use this PC's runner; with no hosted minutes (repo variable
+    # BEDROCK_HOSTED=off) they are skipped and show as skipped (PR author, not the spoofable
+    # actor). Lessons dooperdrew/bedrock#97, #168, #173.
+    if: ${{ !((github.event.pull_request.user.login == 'dependabot[bot]' || (github.event.pull_request.head.repo.full_name || github.repository) != github.repository) && vars.BEDROCK_HOSTED == 'off') }}
+    runs-on: ${{ fromJSON(github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository && vars.BEDROCK_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -178,6 +179,10 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/hosted-jobs-guarded.mjs"
 
+      - name: fork pull requests never reach the self-hosted runner
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/hosted-jobs-guarded.mjs" --forks
+
       - name: no committed link points outside the repo
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/committed-links.mjs"
@@ -190,6 +195,10 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/origin-referrer.mjs"
 
+      - name: tests do not pin the kit version
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/tests-kit-version.mjs"
+
       - name: managed files are committed, not ignored
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/managed-committed.mjs"
@@ -197,6 +206,10 @@ jobs:
       - name: optional kit parts match .bedrock.yml
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/kit-parts-kept.mjs"
+
+      - name: reports endpoint is a base URL
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/reports-endpoint.mjs"
 
       - name: check-run permissions
         shell: bash

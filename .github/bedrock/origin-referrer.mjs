@@ -24,9 +24,14 @@ const READS_ORIGIN =
   /headers\s*(\.\s*origin\b|\[\s*["'`]origin["'`]\s*\])|\.getHeader\s*\(\s*["'`]origin["'`]\s*\)|headers\.get\s*\(\s*["'`]origin["'`]\s*\)|\.header\s*\(\s*["'`]origin["'`]\s*\)/i;
 // "Referrer-Policy": "no-referrer", setHeader("Referrer-Policy", "no-referrer"), helmet's
 // referrerPolicy: { policy: "no-referrer" }, <meta name="referrer" content="no-referrer">.
-// Exactly no-referrer: no-referrer-when-downgrade still sends Origin.
+// Exactly no-referrer: no-referrer-when-downgrade still sends Origin. Not the element attribute
+// referrerpolicy="no-referrer" (<img>, <a>, <iframe>, <link>, <script>) nor el.referrerPolicy =
+// "no-referrer": they govern the request of that one element, not the page's policy, so the
+// page's own form posts keep their Origin (lesson dooperdrew/bedrock#153). Nor the per-request
+// option of fetch() and new Request() (an unquoted referrerPolicy: key): a header name is quoted
+// ("Referrer-Policy": …, setHeader("Referrer-Policy", …)) or written with its hyphen.
 const NO_REFERRER = [
-  /referrer-?policy["'`]?\s*[:,=]\s*["'`]no-referrer["'`]/i,
+  /(["'`]referrer-?policy["'`]\s*[:,]|\breferrer-policy\s*:)\s*["'`]no-referrer["'`]/i,
   /referrerPolicy\s*:\s*\{[^}]*policy\s*:\s*(\[\s*)?["'`]no-referrer["'`]/i,
   /<meta[^>]*name\s*=\s*["']referrer["'][^>]*content\s*=\s*["']no-referrer["']/i,
 ];

@@ -12,6 +12,12 @@ Talk to the user in their language (Italian for DooperDrew). Never run this flow
 ## Start: read the state
 
 1. Read `.bedrock.yml` (key `design:`, the design reference path; default `design/DESIGN.md`) and every `FLOW.md` under `design/`, on main, on open `design/*` branches and on the branches of PRs stacked on them (phase 5 screens); when copies differ, the most advanced one is the state. Several flows can be open at once (see "A second flow in the same repo"): if the request does not say which one, list them with their phase and ask.
+   Then bring FLOW.md in step with what happened outside the flow (the user merges PRs, other sessions build screens). "On main" means the PR's commits reached main, not only its base branch:
+   - phase 4 PR on main → phase 4 `approvato`; closed without merging → back to `in corso`. For a second flow, a merged proposal PR is not an adoption: only the PR that moves its files adopts it;
+   - a listed screen whose PR is on main, linked or among the PRs merged since FLOW.md last changed, is ticked with its link; a closed unmerged screen PR loses its link;
+   - a PR with no link or written «questa»: find it from the header's branch, or from the commit that wrote that line (`git log -S`, then `gh api repos/<owner>/<repo>/commits/<sha>/pulls`);
+   - the header (reference path, mode) matches the repo.
+   Write the changes, with one Registro line (date, PR links), in the first commit of your work and say so; with `stato`, report the gap and change nothing.
 2. Decide the phase:
    - argument given (`brief`, `direzioni`, `iterazione`, `fissa`, `costruisci`) → that phase, after saying what earlier phase is not approved yet, if any;
    - `stato` → only report the state and the next step, change nothing;
@@ -118,14 +124,14 @@ Extract the system from the approved pages into the design reference, in the str
 - if the project has code, a front-end test that the code uses only tokens (see `bedrock-design`, Checks); a second flow adds it only in the PR that adopts it;
 - the `design:` key of `.bedrock.yml` points to the reference (not for a second flow: see "A second flow in the same repo").
 
-Open a PR from the design branch. **Gate:** CI green and the user approves the PR (never merge it yourself unless the user says so).
+Open a PR from the design branch and write its link in the phase 4 row right away (a second commit; never «questa», which no later session can open). **Gate:** CI green and the user approves the PR (never merge it yourself unless the user says so).
 
 ## Phase 5: Build
 
 One screen (or one component family) per PR, in the order of the brief's key screens:
 - read the reference first; use only its tokens and components; a needed design change goes in the reference in the same PR and is said in the PR text;
 - before opening the PR: `impeccable` audit, screenshots at 375 and 1280 px, the token test green;
-- tick the screen in FLOW.md in the same PR.
+- tick the screen in FLOW.md in the same PR, with the PR's link once it exists (not «questa»).
 
 Each PR follows the project's usual merge rules.
 
