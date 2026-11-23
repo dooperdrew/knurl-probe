@@ -64,6 +64,12 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+      # bedrock rules rust-gui-panic-hook and rust-gui-no-console-window: this repo
+      # has its own Rust CI instead of bedrock-rust-ci.yml, which runs these steps.
+      - name: GUI binaries install a panic hook
+        run: node .github/bedrock/windows-gui.mjs --panic-hook
+      - name: GUI binaries start children without a console
+        run: node .github/bedrock/windows-gui.mjs --console
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy
