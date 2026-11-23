@@ -34,7 +34,7 @@ struct Sender {
 
 impl Sender {
     fn send_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
-        self.socket.send_all(bytes)
+        self.socket.send_all(bytes).map_err(String::from)
     }
 
     fn send_mdr(&mut self, payload: Vec<u8>) -> Result<(Frame, Vec<u8>), String> {

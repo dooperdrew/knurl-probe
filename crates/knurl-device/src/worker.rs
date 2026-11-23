@@ -13,9 +13,9 @@ use knurl_protocol::client::{Client, ClientEvent};
 use knurl_protocol::message::Request;
 use knurl_protocol::session::Config;
 
-use crate::DeviceEvent;
 use crate::bluetooth::{self, MDR_V1, Paired};
-use crate::winsock::{RfcommSocket, connect_rfcomm};
+use crate::winsock::{RfcommSocket, WsaError, connect_rfcomm};
+use crate::{AckWatch, DeviceEvent, DisconnectReason};
 
 /// Wait before searching or connecting again after a failure.
 const RETRY_DELAY: Duration = Duration::from_secs(10);
@@ -229,7 +229,7 @@ impl<S: Shutdown> Drop for ShutdownOnDrop<S> {
 
 enum Incoming {
     Bytes(Vec<u8>),
-    Closed(String),
+    Closed(DisconnectReason),
 }
 
 /// One connection, from connect to disconnect. Returns why it ended.
@@ -238,13 +238,13 @@ fn session(
     tx: &Sender<DeviceEvent>,
     commands: &Receiver<Request>,
     stop: &AtomicBool,
-) -> String {
+) -> DisconnectReason {
     let _ = tx.send(DeviceEvent::Connecting {
         name: target.name.clone(),
     });
     let socket = match connect_rfcomm(target.address, MDR_V1) {
         Ok(s) => ShutdownOnDrop(Arc::new(s)),
-        Err(e) => return e,
+        Err(e) => return DisconnectReason::from_wsa(true, e.call, e.code),
     };
     let _ = tx.send(DeviceEvent::Connected {
         name: target.name.clone(),
@@ -259,24 +259,30 @@ fn session(
     let origin = Instant::now();
     let now = || origin.elapsed().as_millis() as u64;
     let mut client = Client::new(Config::default());
+    let mut acks = AckWatch::default();
     // Anything the UI sent before this connection was opened is stale.
     drop_commands(commands, tx);
-    let mut reason = forward(client.start(now()), &socket.0, tx, &client).err();
+    let mut reason = forward(client.start(now()), &socket.0, tx, &client, &mut acks).err();
 
     while reason.is_none() {
         if stop.load(Ordering::Relaxed) {
-            reason = Some("stopped".into());
+            reason = Some(DisconnectReason::Stopped);
             break;
         }
         let events = match bytes_rx.recv_timeout(POLL_INTERVAL) {
-            Ok(Incoming::Bytes(b)) => client.receive(&b, now()),
+            Ok(Incoming::Bytes(b)) => {
+                acks.received();
+                client.receive(&b, now())
+            }
             Ok(Incoming::Closed(why)) => {
                 reason = Some(why);
                 break;
             }
             Err(RecvTimeoutError::Timeout) => Vec::new(),
             Err(RecvTimeoutError::Disconnected) => {
-                reason = Some("reader thread ended".into());
+                reason = Some(DisconnectReason::Failed {
+                    detail: "reader thread ended".into(),
+                });
                 break;
             }
         };
@@ -285,7 +291,7 @@ fn session(
             all.extend(client.command(request, now()));
         }
         all.extend(client.poll(now()));
-        if let Err(e) = forward(all, &socket.0, tx, &client) {
+        if let Err(e) = forward(all, &socket.0, tx, &client, &mut acks) {
             reason = Some(e);
         }
     }
@@ -293,7 +299,7 @@ fn session(
     // Shuts the socket down, which ends the reader's `recv`.
     drop(socket);
     let _ = reader.join();
-    reason.unwrap_or_default()
+    reason.unwrap_or(DisconnectReason::Stopped)
 }
 
 fn read_loop(socket: &RfcommSocket, out: &Sender<Incoming>) {
@@ -301,9 +307,7 @@ fn read_loop(socket: &RfcommSocket, out: &Sender<Incoming>) {
     loop {
         match socket.recv(&mut buf) {
             Ok(0) => {
-                let _ = out.send(Incoming::Closed(
-                    "the headphones closed the connection".into(),
-                ));
+                let _ = out.send(Incoming::Closed(DisconnectReason::ClosedByHeadphones));
                 return;
             }
             Ok(n) => {
@@ -311,29 +315,38 @@ fn read_loop(socket: &RfcommSocket, out: &Sender<Incoming>) {
                     return;
                 }
             }
-            Err(e) => {
-                let _ = out.send(Incoming::Closed(e));
+            Err(WsaError { call, code }) => {
+                let _ = out.send(Incoming::Closed(DisconnectReason::from_wsa(
+                    false, call, code,
+                )));
                 return;
             }
         }
     }
 }
 
-/// Writes outgoing frames and reports the rest to the UI.
+/// Writes outgoing frames and reports the rest to the UI. Ends the
+/// connection when a send fails or the headphones stopped answering.
 fn forward(
     events: Vec<ClientEvent>,
     socket: &RfcommSocket,
     tx: &Sender<DeviceEvent>,
     client: &Client,
-) -> Result<(), String> {
+    acks: &mut AckWatch,
+) -> Result<(), DisconnectReason> {
     for ev in events {
         match ev {
-            ClientEvent::Send(wire) => socket.send_all(&wire)?,
+            ClientEvent::Send(wire) => socket
+                .send_all(&wire)
+                .map_err(|e| DisconnectReason::from_wsa(false, e.call, e.code))?,
             ClientEvent::StateChanged => {
                 let _ = tx.send(DeviceEvent::State(client.state().clone()));
             }
             ClientEvent::RequestFailed { opcode, outcome } => {
                 let _ = tx.send(DeviceEvent::RequestFailed { opcode, outcome });
+                if acks.request_done(outcome) {
+                    return Err(DisconnectReason::NotAnswering);
+                }
             }
             ClientEvent::ProtocolError(e) => {
                 let _ = tx.send(DeviceEvent::ProtocolError(e));

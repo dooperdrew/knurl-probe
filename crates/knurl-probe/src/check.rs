@@ -136,7 +136,7 @@ fn converse(socket: RfcommSocket, service: Service) -> Outcome {
                         }
                     }
                     Err(e) => {
-                        let _ = tx.send(Err(e));
+                        let _ = tx.send(Err(e.to_string()));
                         return;
                     }
                 }
@@ -290,7 +290,8 @@ pub fn run(target: &Headphones, mut progress: impl FnMut(CheckStep)) -> Report {
             }
             // Not listed and not there: a model without this service.
             Err(_) if offer == Offer::Unknown => ServiceResult::NotOffered,
-            Err(reason) => {
+            Err(e) => {
+                let reason = e.to_string();
                 problems.push(format!("could not open {label}: {reason}"));
                 ServiceResult::Failed { reason }
             }

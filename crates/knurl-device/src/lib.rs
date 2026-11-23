@@ -13,12 +13,14 @@
 #[cfg(windows)]
 pub mod bluetooth;
 mod event;
+mod reason;
 #[cfg(windows)]
 pub mod winsock;
 #[cfg(windows)]
 mod worker;
 
 pub use event::DeviceEvent;
+pub use reason::{AckWatch, DisconnectReason, MAX_UNACKED};
 #[cfg(windows)]
 pub use worker::Worker;
 

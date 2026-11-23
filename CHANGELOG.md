@@ -2,6 +2,10 @@
 
 What changed in each release of knurl-probe. The release workflow puts the section of the tagged version on the GitHub release.
 
+## Unreleased
+
+- **`knurl-device`: why a connection ended, as a kind.** `winsock` returns a typed `WsaError` (call and code). `DisconnectReason` says why a connection ended: unreachable, lost, closed by the headphones, not answering, stopped or failed, with the Winsock detail kept for logs. `DeviceEvent::Disconnected` carries it instead of a string, which breaks the API for Knurl. Three requests in a row with no ACK end the connection (`AckWatch`). A send times out after 5 s (`SO_SNDTIMEO`). Ported from Knurl (DooperDrew/knurl, audit of 2026-11-23, points 2, 4 and 5), so that Knurl can use this crate instead of its own copy. Not verified on headphones.
+
 ## 0.1.0
 
 Not released yet.

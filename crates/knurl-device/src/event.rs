@@ -5,6 +5,8 @@
 use knurl_protocol::client::DeviceState;
 use knurl_protocol::session::Outcome;
 
+use crate::DisconnectReason;
+
 /// What the worker reports. Every state the UI shows comes from one of these.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceEvent {
@@ -47,7 +49,7 @@ pub enum DeviceEvent {
     /// The connection could not be opened or was lost.
     Disconnected {
         name: String,
-        reason: String,
+        reason: DisconnectReason,
     },
     /// A command from the UI arrived while no headphones were connected and
     /// was dropped (it is never kept for later).
