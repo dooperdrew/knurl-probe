@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.28.1, stacks: rust)
+## bedrock rules (kit 0.29.0, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -77,7 +77,7 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **rust-lockfile-committed**: Cargo.lock is committed so builds and releases are reproducible. _(CI: Cargo.lock is committed)_
 - **rust-tests-pass**: The whole workspace test suite passes against the committed lockfile. _(CI: cargo test)_
 - **rust-unsafe-documented**: Every unsafe block has a "// SAFETY:" comment explaining why it is sound. _(CI: cargo clippy)_
-- **rust-windows-tests-under-wine**: In a cloud session, Windows-only crates run their tests under Wine (target x86_64-pc-windows-gnu, wine as the cargo runner, xvfb-run for GUI tests) before pushing; the PR reports them as "run under Wine", with the tests that fail under Wine on main too, never as a replacement for the Windows CI. _(review until 2027-02-16)_
+- **rust-windows-tests-under-wine**: In a cloud session, Windows-only crates run their tests under Wine (target x86_64-pc-windows-gnu, wine as the cargo runner, xvfb-run for GUI tests) once `wine cmd /c echo ok` prints ok; the PR lists them as "run under Wine" (with what fails there on main too), or says Wine did not start, with the error. Never a replacement for the Windows CI. _(review until 2027-02-16)_
 - **scripts-flags-need-values**: A writing script fails when a flag's value is missing or is another flag, never widening to the default scope. _(review until 2027-02-22)_
 - **web-origin-check-keeps-referrer**: A server checking Origin against Host on writes never sends Referrer-Policy no-referrer (forms then send Origin: null); it sends same-origin, tested. _(CI: no-referrer does not break Origin checks)_
 - **windows-registry-create-or-open**: Windows registry writes create-or-open the key (RegCreateKeyExW, create()); removals treat a missing key or value as already removed. _(review until 2027-02-07)_

@@ -328,5 +328,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         ? `${files.length} workflow(s): no fork pull request can reach the self-hosted runner.`
         : `${files.length} workflow(s): every GitHub-hosted-only job is skipped when hosted runners are off.`,
     );
+  // CI runs this script twice, without and with --forks; run by hand, a green first half read
+  // as a green check (seen in keyfold's 0.28.1 sync, where only --forks failed).
+  if (!forks && !process.env.GITHUB_ACTIONS)
+    console.log(
+      "Fork pull requests are checked separately: run it again with --forks, as CI does.",
+    );
   process.exit(failed);
 }

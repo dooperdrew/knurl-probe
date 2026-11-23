@@ -1,6 +1,6 @@
 // Managed by bedrock. Do not edit in consumer repos: changes arrive through bedrock sync PRs.
 //
-// Steps of bedrock-rust-ci.yml for crates that build a Windows GUI binary, that is a crate
+// Steps of bedrock-repo-checks.yml for crates that build a Windows GUI binary, that is a crate
 // with a `#![windows_subsystem = "windows"]` attribute (also inside cfg_attr). Such a binary
 // has no console in release builds, which debug builds (console subsystem) hide:
 //
@@ -16,6 +16,10 @@
 //   call creation_flags(, or carry "bedrock: console ok: <reason>" on the line of the call or
 //   the line above. Lesson dooperdrew/bedrock#188 (knurl-probe-app ran `cmd /C ver`;
 //   dooperdrew/knurl#84 H1).
+//
+// They live in repo checks, not bedrock-rust-ci.yml: plain Node runs in every repo, and a rust repo
+// with its own Rust CI never calls bedrock-rust-ci.yml (lesson dooperdrew/bedrock#193). A repo
+// with no such crate has nothing to check.
 //
 // A crate is the nearest folder with a tracked Cargo.toml; files of nested crates belong to
 // them. Comments are ignored, except for the waivers. No dependencies.

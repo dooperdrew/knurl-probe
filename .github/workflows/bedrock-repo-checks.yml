@@ -199,6 +199,18 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/tests-kit-version.mjs"
 
+      # A crate with windows_subsystem = "windows" has no console in release builds: a panic
+      # leaves no trace and a child console program opens a window (lessons #187, #188).
+      # Here and not in bedrock-rust-ci.yml, which a repo with its own Rust CI never calls
+      # (lesson #193); a repo without such a crate has nothing to check.
+      - name: GUI binaries install a panic hook
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --panic-hook
+
+      - name: GUI binaries start children without a console
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --console
+
       - name: managed files are committed, not ignored
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/managed-committed.mjs"
