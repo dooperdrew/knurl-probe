@@ -12,6 +12,7 @@ use knurl_probe_app::flow::{Effect, Event, Flow};
 use knurl_probe_app::ui::MainWindow;
 use knurl_probe_app::{ISSUE_FORM, i18n, send, t, view};
 use slint::ComponentHandle;
+use std::os::windows::process::CommandExt as _;
 use windows::Win32::Globalization::GetUserDefaultLocaleName;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{
@@ -293,6 +294,10 @@ fn save_report() -> Result<String, String> {
     Ok(path.display().to_string())
 }
 
+/// `CREATE_NO_WINDOW` from the Windows process creation flags: a child never
+/// gets a console window of its own.
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// Opens Explorer with the saved file selected.
 fn show_in_folder() {
     let saved = APP.with(|app| match app.borrow().as_ref()?.flow.saved.clone() {
@@ -302,6 +307,8 @@ fn show_in_folder() {
     if let Some(path) = saved
         && let Err(e) = std::process::Command::new("explorer.exe")
             .arg(format!("/select,{path}"))
+            // Explorer has a window of its own; never a console behind it.
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
     {
         message_box(&t!("Could not open the folder: {e}", e = e), MB_ICONWARNING);

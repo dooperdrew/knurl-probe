@@ -46,7 +46,7 @@ flowchart LR
 1. The app lists the paired Sony headphones; the person picks one.
 2. The shared check opens MDR v1 (and v2 when Windows offers it), feeds every received frame to the `Collector`, writes back what it asks, and stops when it is done.
 3. `knurl-report` builds the report (JSON): answers, verdict, every frame, problems, and the sanitized device name.
-4. Save to a file writes it locally. Send wraps it in a `probe` report for the bedrock relay (the shared envelope, the report under `headphones`), shows the exact request first, and posts it with WinHTTP. The relay scrubs it again and opens an issue in this repository ([decision 0004](decisions/0004-send-through-the-relay.md), [decision 0007](decisions/0007-send-as-a-probe-report.md)).
+4. Save to a file writes it locally. A panic on any thread is also written to `%LOCALAPPDATA%\Knurl Probe\crash.log` (`crash.rs`, the hook in `main.rs`), which stays on the PC. Send wraps it in a `probe` report for the bedrock relay (the shared envelope, the report under `headphones`), shows the exact request first, and posts it with WinHTTP. The relay scrubs it again and opens an issue in this repository ([decision 0004](decisions/0004-send-through-the-relay.md), [decision 0007](decisions/0007-send-as-a-probe-report.md)).
 
 ## Release and CI
 - `scripts/package.py` builds and checks the zip (both exes, READMEs, licences, notices, checksum); CI runs it on every pull request and `release.yml` uses it on a `v<version>` tag ([decision 0005](decisions/0005-ci-on-the-owners-runner.md)).
