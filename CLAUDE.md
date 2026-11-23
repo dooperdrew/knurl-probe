@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.27.0, stacks: rust)
+## bedrock rules (kit 0.28.1, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -72,6 +72,8 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **rust-clippy-deny-warnings**: Clippy runs on all targets with warnings treated as errors. _(CI: cargo clippy)_
 - **rust-deps-vetted**: Rust repos commit a deny.toml and CI runs cargo deny check advisories sources bans, because dependency build scripts and proc-macros run on the self-hosted runner with the user's rights. _(CI: dependencies vetted with cargo deny)_
 - **rust-fmt**: Code is formatted with rustfmt; CI fails on any diff. _(CI: cargo fmt)_
+- **rust-gui-no-console-window**: A Windows GUI crate starts child processes with CREATE_NO_WINDOW and reads system facts from APIs, not localized command output. _(CI: GUI binaries start children without a console)_
+- **rust-gui-panic-hook**: A Rust binary with windows_subsystem = "windows" installs a panic hook that leaves a trace the user or the relay can see. _(CI: GUI binaries install a panic hook)_
 - **rust-lockfile-committed**: Cargo.lock is committed so builds and releases are reproducible. _(CI: Cargo.lock is committed)_
 - **rust-tests-pass**: The whole workspace test suite passes against the committed lockfile. _(CI: cargo test)_
 - **rust-unsafe-documented**: Every unsafe block has a "// SAFETY:" comment explaining why it is sound. _(CI: cargo clippy)_

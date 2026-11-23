@@ -71,6 +71,15 @@ jobs:
         shell: bash
         run: git ls-files --error-unmatch Cargo.lock
 
+      # A crate with windows_subsystem = "windows" has no console in release builds: a panic
+      # leaves no trace and a child console program opens a window. Lessons
+      # dooperdrew/bedrock#187 and #188.
+      - name: GUI binaries install a panic hook
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --panic-hook
+
+      - name: GUI binaries start children without a console
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --console
+
       # Build scripts and proc-macros of every dependency run with the runner's rights, on
       # the user's PC: vet them. Lesson dooperdrew/bedrock#96.
       - name: dependencies vetted with cargo deny
