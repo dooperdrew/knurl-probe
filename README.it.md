@@ -2,7 +2,7 @@
 
 [English](README.md) · Italiano
 
-Un'app per Windows, con una riga di comando per gli sviluppatori, che trova le cuffie Sony accoppiate al PC e registra come parlano con il protocollo di controllo di Sony (MDR). È il modo in cui [Knurl](https://github.com/DooperDrew/knurl), l'app del tray per le WH-1000XM3 e WH-1000XM4, impara un modello nuovo: chi ha le cuffie avvia il probe, e quello che registra diventa dati di test e supporto nell'app.
+Un'app per Windows, con una riga di comando per gli sviluppatori, che trova le cuffie Sony accoppiate al PC e registra come parlano con il protocollo di controllo di Sony (MDR). È il modo in cui Knurl, l'app del tray per le WH-1000XM3 e WH-1000XM4 (il suo repository non è ancora pubblico), impara un modello nuovo: chi ha le cuffie avvia il probe, e quello che registra diventa dati di test e supporto nell'app.
 
 Qui c'è anche il codice che Knurl usa per parlare con le cuffie: il protocollo (`knurl-protocol`, senza I/O) e il collegamento di Windows (`knurl-device`).
 

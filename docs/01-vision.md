@@ -13,7 +13,7 @@ order: 5
 
 # Vision and scope
 
-**knurl-probe lets someone with Sony headphones that Knurl does not know yet record how they talk, and send it, in a few minutes and without technical knowledge.** What it records becomes test data and, once checked, support for the model in [Knurl](https://github.com/DooperDrew/knurl), the Windows tray app for Sony headphones.
+**knurl-probe lets someone with Sony headphones that Knurl does not know yet record how they talk, and send it, in a few minutes and without technical knowledge.** What it records becomes test data and, once checked, support for the model in Knurl, the Windows tray app for Sony headphones (its repository is not public yet).
 
 ## Who it is for
 - **People with the headphones.** They open Knurl Probe (`knurl-probe.exe`), follow five screens and press Send: no terminal, no GitHub account, no Bluetooth knowledge.
