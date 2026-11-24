@@ -31,19 +31,24 @@ pub struct Paired {
     pub address: u64,
 }
 
-/// Paired headphones of a supported model (WH-1000XM3 or WH-1000XM4).
+/// Paired headphones of a supported model (WH-1000XM3 or WH-1000XM4). A
+/// device whose name or address cannot be read is skipped: one faulty
+/// pairing must not hide the headphones (audit of Knurl, 2026-11-24).
 pub fn paired_supported_headphones() -> windows::core::Result<Vec<Paired>> {
-    let mut found = Vec::new();
-    for device in paired_classic_devices()? {
+    Ok(supported(paired_classic_devices()?.iter().map(|device| {
         let name = device.Name()?.to_string_lossy();
-        if knurl_protocol::client::is_supported_model(&name) {
-            found.push(Paired {
-                name,
-                address: device.BluetoothAddress()?,
-            });
-        }
-    }
-    Ok(found)
+        Ok::<_, windows::core::Error>((name, device.BluetoothAddress()?))
+    })))
+}
+
+/// The supported headphones among `devices` (name and address each, or the
+/// error reading them), skipping the ones that could not be read.
+fn supported<E>(devices: impl Iterator<Item = Result<(String, u64), E>>) -> Vec<Paired> {
+    devices
+        .filter_map(Result::ok)
+        .filter(|(name, _)| knurl_protocol::client::is_supported_model(name))
+        .map(|(name, address)| Paired { name, address })
+        .collect()
 }
 
 /// `AA:BB:CC:DD:EE:FF` for a 48-bit Bluetooth address.
@@ -58,6 +63,22 @@ pub fn format_address(addr: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_that_cannot_be_read_does_not_hide_the_others() {
+        let devices = vec![
+            Err("faulty pairing"),
+            Ok(("Keyboard".to_string(), 1)),
+            Ok(("WH-1000XM3".to_string(), 2)),
+        ];
+        assert_eq!(
+            supported(devices.into_iter()),
+            vec![Paired {
+                name: "WH-1000XM3".into(),
+                address: 2
+            }]
+        );
+    }
 
     #[test]
     fn formats_addresses() {
