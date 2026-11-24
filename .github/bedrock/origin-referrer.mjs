@@ -58,7 +58,10 @@ export function problems(texts) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let tracked = [];
   try {
-    tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean);
+    // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+    tracked = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], { encoding: "utf8" })
+      .split("\n")
+      .filter(Boolean);
   } catch {
     console.log("Not a git checkout: nothing to check.");
     process.exit(0);

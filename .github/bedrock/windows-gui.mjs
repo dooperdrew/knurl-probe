@@ -181,7 +181,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
   let tracked = [];
   try {
-    tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+    // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+    tracked = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
+      encoding: "utf8",
+    })
       .split("\0")
       .filter(Boolean)
       .filter((f) => existsSync(f));

@@ -187,6 +187,10 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/committed-links.mjs"
 
+      - name: appends take an exclusive lock
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/append-lock.mjs"
+
       - name: local HTTP servers check the Host header
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/local-server-host.mjs"

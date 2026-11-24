@@ -1,5 +1,5 @@
 # bedrock kit configuration. Edit "stacks", "adapters", "design" (path of the design reference), "docs" (modules, skill bedrock-docs) and "vendored" (folders of third-party files); bedrock sync writes the rest.
-bedrock: 0.29.0
+bedrock: 0.33.0
 stacks:
   - rust
 adapters:
@@ -17,6 +17,7 @@ managed:
   - .claude/skills/bedrock-lesson/SKILL.md
   - .claude/skills/brandkit/SKILL.md
   - .claude/skills/design-flow/SKILL.md
+  - .github/bedrock/append-lock.mjs
   - .github/bedrock/checks-permission.mjs
   - .github/bedrock/committed-links.mjs
   - .github/bedrock/docs-index.mjs
