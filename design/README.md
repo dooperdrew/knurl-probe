@@ -81,5 +81,5 @@ From Knurl's `components.slint` (copied as they are): `BrandButton` (primary fil
 **Not verified**
 - The app on Windows: the real window, Segoe UI, scaling at 125-200 %, keyboard and screen reader use.
 - The check from the app on real headphones (the same code as `knurl-probe-cli run`, itself not yet run on headphones since the move).
-- Sending for real: the relay accepts `probe` reports only after its deploy (bedrock-relay ADR-0003); until then it answers that the kind is unknown, which the app shows as "the server does not accept reports from Knurl Probe yet". The WinHTTP transport has not run on Windows.
+- Sending for real: the relay was redeployed on 2026-11-23 from a version that accepts `probe` reports (DooperDrew/bedrock-relay#24), but no report has been sent to it yet. The WinHTTP transport has not run on Windows.
 - The Italian and Spanish texts read by a native speaker; the language switch on Windows (only rendered here).

@@ -8,7 +8,7 @@ What changed in each release of knurl-probe. The release workflow puts the secti
 
 ## 0.1.0
 
-Not released yet.
+Released on 2026-11-23.
 
 Fixed after the audits of 2026-11-21 (not yet run on headphones):
 - **Finding the headphones:** `run` and the app also take the paired classic devices with a Sony model name and open their services with Winsock. WinRT lists no MDR service on the WH-1000XM3, so they found no headphones there. When such a device answers on MDR v1, MDR v2 is reported as `not_tried`.

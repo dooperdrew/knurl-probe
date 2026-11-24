@@ -7,14 +7,14 @@ Un'app per Windows, con una riga di comando per gli sviluppatori, che trova le c
 Qui c'è anche il codice che Knurl usa per parlare con le cuffie: il protocollo (`knurl-protocol`, senza I/O) e il collegamento di Windows (`knurl-device`).
 
 ## Stato
-**Non c'è ancora nessuna release.** La prima (0.1.0) è pronta per il tag: uno zip, `knurl-probe-0.1.0-windows-x64.zip`, con `knurl-probe.exe` (l'app, Knurl Probe), `knurl-probe-cli.exe` (la riga di comando), i README, le licenze e le note sulle terze parti, più il suo SHA-256. Si estrae dove si vuole e si avvia `knurl-probe.exe`: niente installer, niente Rust. `scripts/package.py` costruisce lo zip e lo controlla (elenco esatto dei file, ogni exe byte per byte, le informazioni di versione dell'app, note aggiornate, checksum); la CI lo esegue a ogni pull request e la release usa lo stesso script. Sarà nella pagina delle release di questo repository dopo il push del tag `v0.1.0`.
+**Download:** la release 0.1.0 (23 novembre 2026) è nella [pagina delle release di questo repository](https://github.com/DooperDrew/knurl-probe/releases/tag/v0.1.0): uno zip, `knurl-probe-0.1.0-windows-x64.zip`, con `knurl-probe.exe` (l'app, Knurl Probe), `knurl-probe-cli.exe` (la riga di comando), i README, le licenze e le note sulle terze parti, più il suo SHA-256. Si estrae dove si vuole e si avvia `knurl-probe.exe`: niente installer, niente Rust. `scripts/package.py` costruisce lo zip e lo controlla (elenco esatto dei file, ogni exe byte per byte, le informazioni di versione dell'app, note aggiornate, checksum); la CI lo esegue a ogni pull request e la release ha usato lo stesso script.
 
 **Usato su cuffie vere:** il 7 novembre 2026 il probe ha registrato il traffico della nostra WH-1000XM3 (firmware 4.5.2); quei frame sono i dati di test in `crates/knurl-protocol/tests/`. Risultati: [docs/04-risultati-xm3.md](docs/04-risultati-xm3.md).
 
 **Non ancora verificato:**
 - l'app su Windows: nessuno ha ancora guardato la sua finestra, e non ha controllato cuffie vere (il suo controllo è lo stesso codice di `knurl-probe-cli run`, che a sua volta non ha girato sulle cuffie dopo lo spostamento);
 - trovare le cuffie che WinRT non elenca (come la WH-1000XM3) dal nome Sony e aprirle con Winsock, aggiunto il 22/11/2026: provato con elenchi d'esempio, non sulle cuffie. Le cuffie rinominate in Windows e non elencate da WinRT non vengono trovate;
-- un invio vero dall'app (il relay accetta questi report solo dopo il suo prossimo deploy);
+- un invio vero dall'app (il relay è stato ripubblicato il 2026-11-23 da una versione che accetta i report `probe` (DooperDrew/bedrock-relay#24), ma nessun report gli è ancora stato mandato);
 - nessun altro modello, compresa la WH-1000XM4;
 - il secondo servizio Sony (MDR v2), che secondo le fonti pubbliche usano i modelli più recenti: il probe lo apre, ma ancora niente lo decodifica.
 
@@ -56,7 +56,7 @@ Ogni modello ha una descrizione in [`headphones/`](headphones): il servizio su c
 2. **Scegli le cuffie:** le cuffie Sony accoppiate con Windows; se non ce ne sono, come accoppiarle e "Open Bluetooth settings".
 3. **Controllo:** i passi, in sola lettura, su un thread separato.
 4. **Risultato** in parole semplici: già supportate, modello nuovo, servizio più recente non ancora decodificato, oppure niente letto, con cosa è stato letto.
-5. **Invio:** "Send" apre una issue in questo repository tramite il relay di bedrock, senza account GitHub; "See what will be sent" mostra prima la richiesta esatta. "Save to a file" (in Documenti\Knurl Probe) e il link al modulo "New headphone model" funzionano sempre. **Non verificato:** un invio vero (il relay accetta questi report solo dal suo prossimo deploy; fino ad allora l'app dice che il server non li accetta ancora) e l'app su Windows.
+5. **Invio:** "Send" apre una issue in questo repository tramite il relay di bedrock, senza account GitHub; "See what will be sent" mostra prima la richiesta esatta. "Save to a file" (in Documenti\Knurl Probe) e il link al modulo "New headphone model" funzionano sempre. **Non verificato:** un invio vero (il relay è stato ripubblicato il 2026-11-23 da una versione che accetta i report `probe` (DooperDrew/bedrock-relay#24), ma nessun report gli è ancora stato mandato) e l'app su Windows.
 
 ```powershell
 cargo run --release -p knurl-probe-app

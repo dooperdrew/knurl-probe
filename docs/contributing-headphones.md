@@ -20,7 +20,7 @@ You need the headphones and a Windows 10 or 11 PC.
 2. **Open Knurl Probe** (`knurl-probe.exe`, from the release zip) with the headphones on and connected, and follow the screens: choose your headphones, let it check them (read-only: nothing on the headphones changes), read the result.
 3. **Send or save**: "Send" opens the issue for you, no GitHub account needed; "See what will be sent" shows exactly what leaves the PC first. "Save to a file" writes the report to Documents\Knurl Probe, to attach to a "New headphone model" issue yourself. The report holds no Bluetooth address, and a name you gave your headphones is replaced by a placeholder.
 
-**Not verified:** the app on real headphones, and a real send (the relay accepts these reports only after its next deploy; until then the app says the server does not accept them yet, and saving to a file still works).
+**Not verified:** the app on real headphones, and a real send (the relay was redeployed on 2026-11-23 from a version that accepts `probe` reports (DooperDrew/bedrock-relay#24), but no report has been sent to it yet; saving to a file works either way).
 
 ## With the command line (developers)
 `knurl-probe-cli.exe` is in the same zip; from source, `cargo run -p knurl-probe -- <command>` (Rust, the version pinned in `rust-toolchain.toml`).

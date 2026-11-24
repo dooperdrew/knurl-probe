@@ -7,14 +7,14 @@ A Windows app, with a command line for developers, that finds Sony headphones pa
 This repository also holds the code Knurl uses to talk to the headphones: the protocol (`knurl-protocol`, no I/O) and the Windows connection (`knurl-device`).
 
 ## Status
-**Nothing is released yet.** The first release (0.1.0) is ready to tag: a zip, `knurl-probe-0.1.0-windows-x64.zip`, with `knurl-probe.exe` (the app, Knurl Probe), `knurl-probe-cli.exe` (the command line), the READMEs, the licences and the third-party notices, plus its SHA-256. Unzip it anywhere and run `knurl-probe.exe`; no installer, no Rust. `scripts/package.py` builds the zip and checks it (exact file list, each exe byte for byte, the app's version information, notices up to date, checksum); CI runs it on every pull request and the release uses the same script. It will be on this repository's releases page once the `v0.1.0` tag is pushed.
+**Download:** release 0.1.0 (23 November 2026) is on [this repository's releases page](https://github.com/DooperDrew/knurl-probe/releases/tag/v0.1.0): a zip, `knurl-probe-0.1.0-windows-x64.zip`, with `knurl-probe.exe` (the app, Knurl Probe), `knurl-probe-cli.exe` (the command line), the READMEs, the licences and the third-party notices, plus its SHA-256. Unzip it anywhere and run `knurl-probe.exe`; no installer, no Rust. `scripts/package.py` builds the zip and checks it (exact file list, each exe byte for byte, the app's version information, notices up to date, checksum); CI runs it on every pull request and the release used the same script.
 
 **Used on real headphones:** on 7 November 2026 the probe recorded the traffic of our WH-1000XM3 (firmware 4.5.2); those frames are the test data in `crates/knurl-protocol/tests/`. Results: [docs/04-risultati-xm3.md](docs/04-risultati-xm3.md) (in Italian).
 
 **Not verified yet:**
 - the app on Windows: no person has looked at its window, and it has not checked real headphones (its check is the same code as `knurl-probe-cli run`, which has not run on headphones since the move either);
 - finding headphones that WinRT does not list (as the WH-1000XM3) by their Sony name and opening them with Winsock, added on 2026-11-22: tested with sample lists, not on headphones. Headphones renamed in Windows and not listed by WinRT are not found;
-- a real send from the app (the relay accepts these reports only after its next deploy);
+- a real send from the app (the relay was redeployed on 2026-11-23 from a version that accepts `probe` reports (DooperDrew/bedrock-relay#24), but no report has been sent to it yet);
 - any other model, the WH-1000XM4 included;
 - the second Sony service (MDR v2), which public sources say newer models use: the probe can open it but nothing decodes it yet.
 
@@ -56,7 +56,7 @@ Each model has a description in [`headphones/`](headphones): the service it answ
 2. **Choose your headphones:** the Sony headphones paired with Windows; if none, how to pair them and "Open Bluetooth settings".
 3. **Checking:** the steps, read-only, on a background thread.
 4. **Result** in plain words: already supported, new model, newer service not decoded yet, or nothing read, with what was read.
-5. **Send:** "Send" opens an issue in this repository through the bedrock relay, without a GitHub account; "See what will be sent" shows the exact request first. "Save to a file" (into Documents\Knurl Probe) and the link to the "New headphone model" form always work. **Not verified:** a real send (the relay accepts these reports only after its next deploy; until then the app says the server does not accept them yet) and the app on Windows.
+5. **Send:** "Send" opens an issue in this repository through the bedrock relay, without a GitHub account; "See what will be sent" shows the exact request first. "Save to a file" (into Documents\Knurl Probe) and the link to the "New headphone model" form always work. **Not verified:** a real send (the relay was redeployed on 2026-11-23 from a version that accepts `probe` reports (DooperDrew/bedrock-relay#24), but no report has been sent to it yet) and the app on Windows.
 
 ```powershell
 cargo run --release -p knurl-probe-app
