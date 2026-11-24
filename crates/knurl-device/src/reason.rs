@@ -4,10 +4,19 @@
 
 use knurl_protocol::session::Outcome;
 
-/// Requests in a row with no ACK after which the connection is closed and
-/// opened again: a link that stopped answering (audit 2026-11-23, point 4).
-/// Each request already retries before it counts as one.
-pub const MAX_UNACKED: u32 = 3;
+use std::time::{Duration, SystemTime};
+
+/// Requests in a row with no ACK, while nothing else came from the
+/// headphones, after which the connection is closed and opened again: a
+/// link that stopped answering. Each request already tried 10 times, one
+/// second apart, before it counts, so one is enough: a dead link is found in
+/// about 10 s, not 2-3 minutes (audit 2026-11-24, point 5).
+pub const MAX_UNACKED: u32 = 1;
+
+/// A jump of the wall clock, between two turns of the connection loop, at
+/// least this long means the PC slept: the loop turns every 50 ms or so
+/// (a blocked send waits at most 5 s).
+pub const SLEEP_GAP: Duration = Duration::from_secs(30);
 
 /// Why the connection to the headphones could not open or ended. The app
 /// shows the kind in its language; `detail` (the Winsock call and its code)
@@ -25,6 +34,9 @@ pub enum DisconnectReason {
     /// The headphones stopped answering: [`MAX_UNACKED`] requests in a row
     /// got no ACK, so Knurl closed the connection to open it again.
     NotAnswering,
+    /// The PC woke from sleep: what the headphones reported before may be
+    /// old, so Knurl closed the connection to open it again.
+    Resumed,
     /// Knurl was asked to stop.
     Stopped,
     /// Anything else, with what failed.
@@ -59,6 +71,7 @@ impl DisconnectReason {
             | DisconnectReason::Failed { detail } => detail,
             DisconnectReason::ClosedByHeadphones
             | DisconnectReason::NotAnswering
+            | DisconnectReason::Resumed
             | DisconnectReason::Stopped => "",
         }
     }
@@ -72,6 +85,7 @@ impl std::fmt::Display for DisconnectReason {
             DisconnectReason::Lost { .. } => "connection lost",
             DisconnectReason::ClosedByHeadphones => "closed by the headphones",
             DisconnectReason::NotAnswering => "the headphones stopped answering",
+            DisconnectReason::Resumed => "the PC woke from sleep",
             DisconnectReason::Stopped => "stopped",
             DisconnectReason::Failed { .. } => "failed",
         };
@@ -82,28 +96,58 @@ impl std::fmt::Display for DisconnectReason {
     }
 }
 
-/// Counts requests in a row that got no ACK. Anything received from the
-/// headphones shows the link is alive and starts the count again.
+/// Counts requests in a row that got no ACK while nothing else arrived.
+/// Anything received from the headphones shows the link is alive: it starts
+/// the count again, and a request that ends without an ACK after something
+/// else arrived does not count.
 #[derive(Debug, Default)]
 pub struct AckWatch {
     unacked: u32,
+    /// Something arrived since the last request ended.
+    heard: bool,
 }
 
 impl AckWatch {
     /// Bytes arrived from the headphones.
     pub fn received(&mut self) {
         self.unacked = 0;
+        self.heard = true;
     }
 
     /// A request ended with `outcome`. True when the connection should be
-    /// closed: [`MAX_UNACKED`] requests in a row got no ACK.
+    /// closed: [`MAX_UNACKED`] requests in a row got no ACK and nothing else
+    /// arrived meanwhile.
     pub fn request_done(&mut self, outcome: Outcome) -> bool {
-        if outcome == Outcome::NoAck {
-            self.unacked += 1;
-        } else {
+        let heard = std::mem::take(&mut self.heard);
+        if outcome != Outcome::NoAck {
             self.unacked = 0;
+        } else if !heard {
+            self.unacked += 1;
         }
         self.unacked >= MAX_UNACKED
+    }
+}
+
+/// Notices that the PC slept, from a jump of the wall clock between two
+/// turns of the connection loop ([`SLEEP_GAP`]). The wall clock keeps
+/// counting while the PC sleeps; a clock set forward by that much also
+/// counts, and costs only a reconnect.
+#[derive(Debug)]
+pub struct WakeWatch {
+    last: SystemTime,
+}
+
+impl WakeWatch {
+    pub fn new(now: SystemTime) -> Self {
+        Self { last: now }
+    }
+
+    /// One turn of the loop at `now`. True when the PC slept since the
+    /// last turn.
+    pub fn woke(&mut self, now: SystemTime) -> bool {
+        let gap = now.duration_since(self.last).unwrap_or_default();
+        self.last = now;
+        gap >= SLEEP_GAP
     }
 }
 
@@ -146,22 +190,43 @@ mod tests {
     }
 
     #[test]
-    fn three_unacked_requests_in_a_row_close_the_connection() {
+    fn one_unacked_request_with_nothing_else_heard_closes_the_connection() {
         let mut watch = AckWatch::default();
-        assert!(!watch.request_done(Outcome::NoAck));
-        assert!(!watch.request_done(Outcome::NoAck));
         assert!(watch.request_done(Outcome::NoAck));
     }
 
     #[test]
-    fn an_answer_or_any_byte_starts_the_count_again() {
+    fn an_answer_or_any_byte_keeps_the_connection() {
         let mut watch = AckWatch::default();
-        watch.request_done(Outcome::NoAck);
-        watch.request_done(Outcome::NoAck);
+        assert!(!watch.request_done(Outcome::NoReply), "acknowledged");
+        watch.received();
+        assert!(
+            !watch.request_done(Outcome::NoAck),
+            "something arrived while the request waited"
+        );
+        assert!(watch.request_done(Outcome::NoAck), "then silence");
         watch.received();
         assert!(!watch.request_done(Outcome::NoAck));
-        assert!(!watch.request_done(Outcome::NoAck));
-        assert!(!watch.request_done(Outcome::NoReply), "acknowledged");
-        assert!(!watch.request_done(Outcome::NoAck));
+    }
+
+    #[test]
+    fn a_long_jump_of_the_clock_means_the_pc_slept() {
+        let t0 = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let mut watch = WakeWatch::new(t0);
+        assert!(!watch.woke(t0 + Duration::from_millis(50)));
+        assert!(!watch.woke(t0 + Duration::from_secs(6)), "a slow send");
+        assert!(watch.woke(t0 + Duration::from_secs(6) + SLEEP_GAP));
+        assert!(!watch.woke(t0 + Duration::from_secs(37)));
+        // A clock set back is not a sleep.
+        assert!(!watch.woke(t0));
+    }
+
+    #[test]
+    fn resumed_has_words_and_no_detail() {
+        assert_eq!(DisconnectReason::Resumed.detail(), "");
+        assert_eq!(
+            DisconnectReason::Resumed.to_string(),
+            "the PC woke from sleep"
+        );
     }
 }

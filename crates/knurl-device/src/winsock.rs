@@ -8,9 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use windows::Win32::Devices::Bluetooth::{AF_BTH, BTHPROTO_RFCOMM, SOCKADDR_BTH};
 
 use windows::Win32::Networking::WinSock::{
-    SD_BOTH, SEND_RECV_FLAGS, SO_RCVTIMEO, SO_SNDTIMEO, SOCK_STREAM, SOCKADDR, SOCKET, SOL_SOCKET,
-    WSACleanup, WSADATA, WSAETIMEDOUT, WSAGetLastError, WSAStartup, closesocket, connect, recv,
-    send, setsockopt, shutdown, socket,
+    FD_SET, SD_BOTH, SEND_RECV_FLAGS, SO_SNDTIMEO, SOCK_STREAM, SOCKADDR, SOCKET, SOCKET_ERROR,
+    SOL_SOCKET, TIMEVAL, WSACleanup, WSADATA, WSAGetLastError, WSAStartup, closesocket, connect,
+    recv, select, send, setsockopt, shutdown, socket,
 };
 use windows::core::GUID;
 
@@ -68,14 +68,19 @@ impl Drop for WsaGuard {
 pub struct RfcommSocket {
     socket: SOCKET,
     _wsa: WsaGuard,
-    /// Set by `shutdown`: a `recv` that times out then returns as closed.
+    /// Set by `shutdown`: a `recv` whose wait ends with nothing to read
+    /// then returns as closed.
     closing: AtomicBool,
 }
 
-/// How long one `recv` waits before checking whether the socket is closing.
-/// `shutdown` alone is not documented to wake a `recv` blocked on an AF_BTH
-/// socket, so the reader never waits longer than this after a shutdown.
-const RECV_TIMEOUT_MS: u32 = 1000;
+/// How long `recv` waits for data (with `select`) before checking whether
+/// the socket is closing. `shutdown` alone is not documented to wake a
+/// reader blocked on an AF_BTH socket, so the reader never waits longer than
+/// this after a shutdown. The wait uses `select`, not `SO_RCVTIMEO`: after a
+/// `recv` timeout Winsock leaves the socket in an indeterminate state, so
+/// data could be lost (audit 2026-11-24, point 4). `recv` itself is called
+/// only when `select` says there is something to read.
+const RECV_WAIT_SECS: i32 = 1;
 
 /// How long one `send` may block. Without it a send to headphones that
 /// stopped reading could wait for ever (audit 2026-11-23, point 5); a
@@ -98,32 +103,51 @@ impl RfcommSocket {
     }
 
     /// Blocks until data arrives. `Ok(0)` means the remote side closed, or
-    /// that this socket was shut down (seen within [`RECV_TIMEOUT_MS`]).
+    /// that this socket was shut down (seen within [`RECV_WAIT_SECS`]).
     pub fn recv(&self, buf: &mut [u8]) -> Result<usize, WsaError> {
         loop {
+            if !self.wait_readable()? {
+                // Nothing arrived in time. Stop if we are closing.
+                if self.closing.load(Ordering::Acquire) {
+                    return Ok(0);
+                }
+                continue;
+            }
             // SAFETY: `self.socket` is open for the lifetime of `self` and
             // `buf` is a valid, writable slice.
             let n = unsafe { recv(self.socket, buf, SEND_RECV_FLAGS(0)) };
             if n >= 0 {
                 return Ok(n as usize);
             }
-            // SAFETY: called right after the failing recv on this thread.
-            let err = unsafe { WSAGetLastError() };
-            if err != WSAETIMEDOUT {
-                return Err(WsaError {
-                    call: "recv",
-                    code: err.0,
-                });
-            }
-            // Only a timeout: nothing arrived. Stop if we are closing.
-            if self.closing.load(Ordering::Acquire) {
-                return Ok(0);
-            }
+            return Err(last_error("recv"));
         }
     }
 
-    /// Shuts both directions down. A `recv` blocked in another thread
-    /// returns at the latest when its timeout expires.
+    /// Waits up to [`RECV_WAIT_SECS`] for the socket to be readable: data,
+    /// a close by the remote side, or a shutdown. False when the time ran
+    /// out with nothing to read.
+    fn wait_readable(&self) -> Result<bool, WsaError> {
+        let mut set = FD_SET {
+            fd_count: 1,
+            ..Default::default()
+        };
+        set.fd_array[0] = self.socket;
+        let timeout = TIMEVAL {
+            tv_sec: RECV_WAIT_SECS,
+            tv_usec: 0,
+        };
+        // SAFETY: `set` holds one open socket and `timeout` is a valid
+        // TIMEVAL; both outlive the call. The first argument is ignored by
+        // Winsock.
+        let n = unsafe { select(0, Some(&mut set), None, None, Some(&timeout)) };
+        if n == SOCKET_ERROR {
+            return Err(last_error("select"));
+        }
+        Ok(n > 0)
+    }
+
+    /// Shuts both directions down. A `recv` waiting in another thread
+    /// returns at the latest when its wait ends.
     pub fn shutdown(&self) {
         self.closing.store(true, Ordering::Release);
         // SAFETY: `self.socket` is open for the lifetime of `self`.
@@ -161,14 +185,9 @@ pub fn connect_rfcomm(address: u64, service: GUID) -> Result<RfcommSocket, WsaEr
         _wsa: wsa,
         closing: AtomicBool::new(false),
     };
-    let timeout = RECV_TIMEOUT_MS.to_le_bytes();
-    // SAFETY: `opened.socket` is a valid socket; SO_RCVTIMEO takes a DWORD in
-    // milliseconds, passed as its 4 bytes.
-    if unsafe { setsockopt(opened.socket, SOL_SOCKET, SO_RCVTIMEO, Some(&timeout)) } != 0 {
-        return Err(last_error("setsockopt(SO_RCVTIMEO)"));
-    }
     let timeout = SEND_TIMEOUT_MS.to_le_bytes();
-    // SAFETY: as above; SO_SNDTIMEO takes the same DWORD in milliseconds.
+    // SAFETY: `opened.socket` is a valid socket; SO_SNDTIMEO takes a DWORD in
+    // milliseconds, passed as its 4 bytes.
     if unsafe { setsockopt(opened.socket, SOL_SOCKET, SO_SNDTIMEO, Some(&timeout)) } != 0 {
         return Err(last_error("setsockopt(SO_SNDTIMEO)"));
     }

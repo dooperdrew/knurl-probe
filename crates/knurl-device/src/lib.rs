@@ -20,7 +20,7 @@ pub mod winsock;
 mod worker;
 
 pub use event::DeviceEvent;
-pub use reason::{AckWatch, DisconnectReason, MAX_UNACKED};
+pub use reason::{AckWatch, DisconnectReason, MAX_UNACKED, SLEEP_GAP, WakeWatch};
 #[cfg(windows)]
 pub use worker::Worker;
 

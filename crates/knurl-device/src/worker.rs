@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use knurl_protocol::client::{Client, ClientEvent};
 use knurl_protocol::message::Request;
@@ -15,10 +15,13 @@ use knurl_protocol::session::Config;
 
 use crate::bluetooth::{self, MDR_V1, Paired};
 use crate::winsock::{RfcommSocket, WsaError, connect_rfcomm};
-use crate::{AckWatch, DeviceEvent, DisconnectReason};
+use crate::{AckWatch, DeviceEvent, DisconnectReason, WakeWatch};
 
 /// Wait before searching or connecting again after a failure.
 const RETRY_DELAY: Duration = Duration::from_secs(10);
+/// Wait before connecting again after the PC woke from sleep: long enough
+/// for Bluetooth to come back, short enough not to show old data for long.
+const RESUME_DELAY: Duration = Duration::from_secs(3);
 /// How often the client is polled when no data arrives.
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -189,13 +192,23 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
         };
         turn = turn.wrapping_add(1);
         let reason = session(&target, tx, commands, stop);
+        let delay = retry_delay(&reason);
         let _ = tx.send(DeviceEvent::Disconnected {
             name: target.name.clone(),
             reason,
         });
-        if !wait(stop, RETRY_DELAY) {
+        if !wait(stop, delay) {
             return;
         }
+    }
+}
+
+/// How long to wait before the next try after a connection ended.
+fn retry_delay(reason: &DisconnectReason) -> Duration {
+    if *reason == DisconnectReason::Resumed {
+        RESUME_DELAY
+    } else {
+        RETRY_DELAY
     }
 }
 
@@ -246,9 +259,9 @@ fn session(
         Ok(s) => ShutdownOnDrop(Arc::new(s)),
         Err(e) => return DisconnectReason::from_wsa(true, e.call, e.code),
     };
-    let _ = tx.send(DeviceEvent::Connected {
-        name: target.name.clone(),
-    });
+    // "Connected" waits for the headphones' first answer (audit 2026-11-24,
+    // point 6): an open socket alone does not show they talk MDR.
+    let mut announced = false;
 
     let (bytes_tx, bytes_rx) = channel();
     let reader = {
@@ -262,6 +275,7 @@ fn session(
     let mut acks = AckWatch::default();
     // Anything the UI sent before this connection was opened is stale.
     drop_commands(commands, tx);
+    let mut wake = WakeWatch::new(SystemTime::now());
     let mut reason = forward(client.start(now()), &socket.0, tx, &client, &mut acks).err();
 
     while reason.is_none() {
@@ -269,10 +283,21 @@ fn session(
             reason = Some(DisconnectReason::Stopped);
             break;
         }
+        if wake.woke(SystemTime::now()) {
+            reason = Some(DisconnectReason::Resumed);
+            break;
+        }
         let events = match bytes_rx.recv_timeout(POLL_INTERVAL) {
             Ok(Incoming::Bytes(b)) => {
                 acks.received();
-                client.receive(&b, now())
+                let events = client.receive(&b, now());
+                if !announced && answered(&events) {
+                    announced = true;
+                    let _ = tx.send(DeviceEvent::Connected {
+                        name: target.name.clone(),
+                    });
+                }
+                events
             }
             Ok(Incoming::Closed(why)) => {
                 reason = Some(why);
@@ -300,6 +325,17 @@ fn session(
     drop(socket);
     let _ = reader.join();
     reason.unwrap_or(DisconnectReason::Stopped)
+}
+
+/// True when bytes from the headphones decoded into something: a reply or
+/// notification changed the state, or a frame was acknowledged back. Bytes
+/// that only completed part of a frame, or failed to decode, are not an
+/// answer yet.
+fn answered(events: &[ClientEvent]) -> bool {
+    !events.is_empty()
+        && !events
+            .iter()
+            .any(|e| matches!(e, ClientEvent::ProtocolError(_)))
 }
 
 fn read_loop(socket: &RfcommSocket, out: &Sender<Incoming>) {
@@ -455,6 +491,20 @@ mod tests {
         let socket = Arc::new(FakeSocket::default());
         drop(ShutdownOnDrop(socket.clone()));
         assert!(socket.shut.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn only_decoded_bytes_count_as_an_answer() {
+        assert!(!answered(&[]), "part of a frame");
+        assert!(answered(&[ClientEvent::StateChanged]));
+        assert!(answered(&[ClientEvent::Send(vec![0x3e])]), "an ACK back");
+        assert!(!answered(&[ClientEvent::ProtocolError("bad".into())]));
+    }
+
+    #[test]
+    fn after_a_sleep_the_next_try_comes_sooner() {
+        assert_eq!(retry_delay(&DisconnectReason::Resumed), RESUME_DELAY);
+        assert_eq!(retry_delay(&DisconnectReason::NotAnswering), RETRY_DELAY);
     }
 
     #[test]
