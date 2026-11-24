@@ -4,7 +4,7 @@
 //
 //   node .github/bedrock/docs-index.mjs            write the index in docs/README.md
 //   node .github/bedrock/docs-index.mjs --check    fail if the index is out of date
-//   node .github/bedrock/docs-index.mjs --links    fail on broken relative links in tracked Markdown
+//   node .github/bedrock/docs-index.mjs --links    fail on broken relative links in Markdown git lists
 //   node .github/bedrock/docs-index.mjs --readme   fail unless README.md and README.it.md link each other
 //
 // Each doc under docs/ starts with a front matter block:
@@ -341,7 +341,11 @@ export function buildIndex(root) {
 
 function trackedMarkdown(root) {
   try {
-    return execFileSync("git", ["ls-files", "-z", "--", "*.md"], { cwd: root, encoding: "utf8" })
+    // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+    return execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "--", "*.md"], {
+      cwd: root,
+      encoding: "utf8",
+    })
       .split("\0")
       .filter(Boolean);
   } catch {
@@ -417,10 +421,14 @@ export function linkTargets(text) {
   return targets;
 }
 
-/** Tracked files and their folders, exactly as git (and GitHub) see them; null without git. */
+/** Files `git add -A` would commit and their folders, with exact case; null without git. */
 function trackedPaths(root) {
   try {
-    const files = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
+    // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+    const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
+      cwd: root,
+      encoding: "utf8",
+    })
       .split("\0")
       .filter(Boolean);
     const set = new Set(files);

@@ -7,7 +7,10 @@ import { existsSync, readFileSync } from "node:fs";
 
 // Two branches open at once both take "the next number"; when they meet, one migration has
 // to be renamed after it may already have run somewhere. Lesson dooperdrew/bedrock#61.
-const files = execFileSync("git", ["ls-files", "-z", "--", "*.sql"], { encoding: "utf8" })
+// Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "--", "*.sql"], {
+  encoding: "utf8",
+})
   .split("\0")
   .filter(Boolean);
 // Folders of third-party files (vendored: in .bedrock.yml) are not the repo's migrations.

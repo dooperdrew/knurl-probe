@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.29.0, stacks: rust)
+## bedrock rules (kit 0.33.0, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -79,8 +79,10 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **rust-unsafe-documented**: Every unsafe block has a "// SAFETY:" comment explaining why it is sound. _(CI: cargo clippy)_
 - **rust-windows-tests-under-wine**: In a cloud session, Windows-only crates run their tests under Wine (target x86_64-pc-windows-gnu, wine as the cargo runner, xvfb-run for GUI tests) once `wine cmd /c echo ok` prints ok; the PR lists them as "run under Wine" (with what fails there on main too), or says Wine did not start, with the error. Never a replacement for the Windows CI. _(review until 2027-02-16)_
 - **scripts-flags-need-values**: A writing script fails when a flag's value is missing or is another flag, never widening to the default scope. _(review until 2027-02-22)_
+- **shared-append-exclusive-lock**: Concurrent appends to one file use FileShare.None or a mutex (other shares lock nothing on Linux); writers and readers retry. _(CI: appends take an exclusive lock)_
 - **web-origin-check-keeps-referrer**: A server checking Origin against Host on writes never sends Referrer-Policy no-referrer (forms then send Origin: null); it sends same-origin, tested. _(CI: no-referrer does not break Origin checks)_
 - **windows-registry-create-or-open**: Windows registry writes create-or-open the key (RegCreateKeyExW, create()); removals treat a missing key or value as already removed. _(review until 2027-02-07)_
+- **windows-tar-relative-paths**: On Windows runners tar gets relative archive names, --force-local or System32 tar: GNU tar reads C:\x as host:path. _(review until 2027-02-23)_
 - **work-cloud-first**: Work needing no PC hardware, Windows-only build, PC-only file or host the cloud proxy refuses runs in a cloud session, handed off by local ones. _(review until 2027-02-15)_
 - **work-is-pushed**: Work happens on a claude/<topic> branch; each verified step is committed and pushed; changes reach main only through a PR. _(review until 2027-02-04)_
 - **workflow-scripts-in-files**: A workflow run: block holds only short shell; an interpreter script over 30 lines lives in its own file, called by the step. _(CI: workflow run blocks keep long scripts in files)_

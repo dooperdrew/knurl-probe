@@ -101,9 +101,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log("No bedrock: version in .bedrock.yml (not a synced repo): nothing to check.");
     process.exit(0);
   }
-  const out = execFileSync("git", ["-c", "core.quotepath=off", "ls-files", "-z"], {
-    encoding: "utf8",
-  });
+  // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+  const out = execFileSync(
+    "git",
+    ["-c", "core.quotepath=off", "ls-files", "-co", "--exclude-standard", "-z"],
+    {
+      encoding: "utf8",
+    },
+  );
   const tracked = new Set(out.split("\0").filter(Boolean));
   const problems = partProblems({ config, tracked });
   for (const p of problems) console.log(`::error file=.bedrock.yml::${p}`);

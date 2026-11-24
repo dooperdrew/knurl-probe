@@ -42,9 +42,14 @@ const isDir = (p) => existsSync(p) && statSync(p).isDirectory();
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const problems = [];
-  const tracked = execFileSync("git", ["ls-files", "-z", "--", "package.json", "**/package.json"], {
-    encoding: "utf8",
-  })
+  // Untracked files too, unless ignored: a run before git add checks what the PR will (#196).
+  const tracked = execFileSync(
+    "git",
+    ["ls-files", "-co", "--exclude-standard", "-z", "--", "package.json", "**/package.json"],
+    {
+      encoding: "utf8",
+    },
+  )
     .split("\0")
     .filter((f) => f && !f.includes("node_modules/"));
   for (const file of tracked) {
