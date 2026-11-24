@@ -1,5 +1,5 @@
 # bedrock kit configuration. Edit "stacks", "adapters", "design" (path of the design reference), "docs" (modules, skill bedrock-docs) and "vendored" (folders of third-party files); bedrock sync writes the rest.
-bedrock: 0.33.0
+bedrock: 0.39.0
 stacks:
   - rust
 adapters:
@@ -21,6 +21,8 @@ managed:
   - .github/bedrock/checks-permission.mjs
   - .github/bedrock/committed-links.mjs
   - .github/bedrock/docs-index.mjs
+  - .github/bedrock/fixture-identity.mjs
+  - .github/bedrock/gh-conditional.mjs
   - .github/bedrock/hosted-jobs-guarded.mjs
   - .github/bedrock/install-linters.sh
   - .github/bedrock/kit-parts-kept.mjs
@@ -31,6 +33,7 @@ managed:
   - .github/bedrock/node-test-args.mjs
   - .github/bedrock/origin-referrer.mjs
   - .github/bedrock/reports-endpoint.mjs
+  - .github/bedrock/startup-approved.mjs
   - .github/bedrock/tests-kit-version.mjs
   - .github/bedrock/windows-gui.mjs
   - .github/bedrock/workflow-scripts-short.mjs

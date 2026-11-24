@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.33.0, stacks: rust)
+## bedrock rules (kit 0.39.0, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -31,6 +31,7 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **actions-lint**: Workflows pass actionlint (syntax, expressions, embedded shell). _(CI: actionlint)_
 - **actions-secure**: Workflows pass zizmor; third-party actions are SHA-pinned with a version comment, permissions are minimal, checkout keeps no token. _(CI: zizmor)_
 - **branch-has-bedrock-ci**: A PR branch older than the last bedrock sync merges main before review so bedrock checks run; stacked PRs pass it down. _(review until 2027-02-07)_
+- **branch-protection-plan-limit**: A 403 'Upgrade to GitHub Pro' on branch protection means unavailable, never protected: auto-merge stays off; plans name Pro. _(review until 2027-02-24)_
 - **ci-dependabot-fallback-explicit**: Dependabot PRs never run on the PC runner; with BEDROCK_HOSTED=off their jobs skip, by an if: on the PR author, not github.actor. _(CI: hosted-only jobs skip when there are no hosted minutes)_
 - **ci-fork-prs-never-self-hosted**: A job that can use the PC runner takes it only for pushes and same-repo PRs (runs-on or if: tests head.repo.full_name); forks run hosted. _(CI: fork pull requests never reach the self-hosted runner)_
 - **ci-hosted-jobs-skip-without-minutes**: A job on a GitHub-hosted runner has a job-level if: on vars.BEDROCK_HOSTED or BEDROCK_RUNNER, so it skips, not fails unstarted. _(CI: hosted-only jobs skip when there are no hosted minutes)_
@@ -38,11 +39,13 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **ci-system-jobs-github-hosted**: Jobs installing or starting the app, changing system settings or measuring the machine run only GitHub-hosted; the PC skips them with a warning. _(review until 2027-02-10)_
 - **ci-wsl-keepalive**: A job using a WSL service keeps a WSL client running (background wsl.exe sleep) and first waits for it on 127.0.0.1; systemd alone won't. _(CI: workflows that call WSL keep it alive)_
 - **claims-are-verified**: Every claim in the README, docs or a PR body is backed by a test or a measurement; anything else says "not verified". _(review until 2027-02-04)_
+- **dependabot-skipped-untested**: A Dependabot PR whose project jobs all skipped is untested: before merging, run its checks locally or in a same-repo PR, listed there. _(review until 2027-02-24)_
 - **design-check-language-waiver**: When a design check reads only English and the page is not, keep the copy, record a waiver with why, list it as not verified. _(review until 2027-02-11)_
 - **design-proposals-own-folder**: Side-by-side proposals change only their own folder; shared files (lint config, design reference, app code) change in the adopting PR. _(review until 2027-02-11)_
 - **design-reference**: A UI project declares a design reference (identity, tokens with measured contrast, components, screens) as design in .bedrock.yml; UI PRs update it. _(CI: design reference exists)_
 - **docs-index-current**: With docs modules set, docs under docs/ have front matter (title, summary, type) and docs/README.md is the generated index (bedrock-docs). _(CI: docs index is up to date)_
 - **docs-links-resolve**: Relative links and images in tracked Markdown resolve to repo files (one working only on one PC breaks on GitHub). _(CI: Markdown links resolve)_
+- **github-api-304-unchanged**: Conditional gh api calls (If-None-Match) pass --include and read the status line: a 304 (exit 1) means unchanged, never an error. _(CI: conditional gh api reads use --include)_
 - **github-api-empty-body-ok**: Code parsing gh api output treats empty stdout with exit 0 as success (201, 202, 204 have no body), tested with no content. _(review until 2027-02-17)_
 - **github-api-reads-complete**: Code reading GitHub list APIs follows every page up to a cap it reports (paged test doubles); CI queue time counts from created_at. _(review until 2027-02-19)_
 - **local-server-checks-host**: A local HTTP server answers only when Host is an IP literal, localhost or a configured name (no DNS rebinding). _(CI: local HTTP servers check the Host header)_
@@ -80,12 +83,15 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **rust-windows-tests-under-wine**: In a cloud session, Windows-only crates run their tests under Wine (target x86_64-pc-windows-gnu, wine as the cargo runner, xvfb-run for GUI tests) once `wine cmd /c echo ok` prints ok; the PR lists them as "run under Wine" (with what fails there on main too), or says Wine did not start, with the error. Never a replacement for the Windows CI. _(review until 2027-02-16)_
 - **scripts-flags-need-values**: A writing script fails when a flag's value is missing or is another flag, never widening to the default scope. _(review until 2027-02-22)_
 - **shared-append-exclusive-lock**: Concurrent appends to one file use FileShare.None or a mutex (other shares lock nothing on Linux); writers and readers retry. _(CI: appends take an exclusive lock)_
+- **telemetry-fields-allowlisted**: Telemetry and log receivers store an allowlist of fields (Claude Code's OTLP carries user.email); fixtures hold no real identity. _(CI: fixtures hold no personal identity)_
 - **web-origin-check-keeps-referrer**: A server checking Origin against Host on writes never sends Referrer-Policy no-referrer (forms then send Origin: null); it sends same-origin, tested. _(CI: no-referrer does not break Origin checks)_
+- **windows-autostart-startup-approved**: Start with Windows via the Run key also reads Explorer\StartupApproved\Run (odd first byte = off) and clears it when turned on. _(CI: Start with Windows reads StartupApproved)_
 - **windows-registry-create-or-open**: Windows registry writes create-or-open the key (RegCreateKeyExW, create()); removals treat a missing key or value as already removed. _(review until 2027-02-07)_
 - **windows-tar-relative-paths**: On Windows runners tar gets relative archive names, --force-local or System32 tar: GNU tar reads C:\x as host:path. _(review until 2027-02-23)_
 - **work-cloud-first**: Work needing no PC hardware, Windows-only build, PC-only file or host the cloud proxy refuses runs in a cloud session, handed off by local ones. _(review until 2027-02-15)_
 - **work-is-pushed**: Work happens on a claude/<topic> branch; each verified step is committed and pushed; changes reach main only through a PR. _(review until 2027-02-04)_
 - **workflow-scripts-in-files**: A workflow run: block holds only short shell; an interpreter script over 30 lines lives in its own file, called by the step. _(CI: workflow run blocks keep long scripts in files)_
+- **zip-not-gnu-tar**: Zips come from zip, bsdtar or a library, never a tar that may be GNU (-a writes a tar named .zip); the zip is verified. _(review until 2027-02-24)_
 
 Design reference: `design/README.md`. Read it before UI work and update it in the same PR as a UI change; any session may review it (skill `bedrock-design`).
 

@@ -215,6 +215,21 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --console
 
+      - name: Start with Windows reads StartupApproved
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/startup-approved.mjs"
+
+      # Claude Code's telemetry carries the account email; raw captures kept as fixtures keep it
+      # in git (lesson #215).
+      - name: fixtures hold no personal identity
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/fixture-identity.mjs"
+
+      # gh api exits 1 on a 304 Not Modified: conditional reads need --include to see it (lesson #220).
+      - name: conditional gh api reads use --include
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/gh-conditional.mjs"
+
       - name: managed files are committed, not ignored
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/managed-committed.mjs"
