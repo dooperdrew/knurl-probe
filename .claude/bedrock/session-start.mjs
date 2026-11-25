@@ -9,6 +9,10 @@
 // read, so it installs the external design skills from cloud-skills.json (pinned
 // commits, same as the PC) into this repo's .claude/skills, keeps them out of git
 // through .git/info/exclude, and reports the tools this repo's stacks need.
+// It also sets this repo's git identity to the GitHub noreply author found in its history when
+// git would commit as the cloud default (noreply@anthropic.com): otherwise every commit, merge or
+// rebase made without -c user.email gets a committer that bedrock's repo checks reject after the
+// push (lesson dooperdrew/bedrock#229, dooperdrew/keyfold#96).
 // What it prints is added to the session's context.
 // It never fails the session: every problem is reported, the exit code is always 0.
 import { execFileSync } from "node:child_process";
@@ -84,6 +88,61 @@ export function nodeMajor(text) {
   return m ? Number(m[1]) : null;
 }
 
+const NOREPLY = /@users\.noreply\.github\.com$/i;
+
+function git(repoDir, args) {
+  try {
+    return execFileSync("git", args, {
+      cwd: repoDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Makes git commit as the repo's GitHub noreply author. Returns one line for the session, or null
+ * when the identity is already a noreply address. With fix = false it only reports. The identity is
+ * the most recent author of the repo's history with a noreply address; it is set in the repo's own
+ * config (never --global).
+ */
+export function gitIdentity(repoDir, { fix = true } = {}) {
+  const email = git(repoDir, ["config", "user.email"]);
+  if (NOREPLY.test(email)) return null;
+  const authors = git(repoDir, ["log", "-n", "500", "--format=%an%x09%ae"]).split("\n");
+  // Bots (dependabot[bot], github-actions[bot]) have noreply addresses too, and rebase merges keep
+  // their authorship: never commit as them.
+  // Copilot's agent commits as Copilot <…+Copilot@users.noreply.github.com>, without [bot]. The
+  // repo owner's login (from the origin URL) wins over a rebase-merged outside contributor.
+  const people = authors
+    .map((l) => l.split("\t"))
+    .filter(([n, e]) => n && e && NOREPLY.test(e) && !/\[bot\]|(^|\+)copilot@/i.test(`${n} ${e}`));
+  const owner = /github\.com[/:]([^/]+)\//i.exec(
+    git(repoDir, ["remote", "get-url", "origin"]),
+  )?.[1];
+  const login = (e) =>
+    e
+      .replace(NOREPLY, "")
+      .replace(/^\d+\+/, "")
+      .toLowerCase();
+  const found = (owner && people.find(([, e]) => login(e) === owner.toLowerCase())) || people[0];
+  const now = email ? `git commits as ${email}` : "git has no user.email";
+  if (!found)
+    return `git identity: ${now}, not a GitHub noreply address, and no noreply author in this repo's history: set user.name and user.email to the owner's noreply identity before committing (rule repo-commit-identity).`;
+  const [name, address] = found;
+  if (!fix)
+    return `git identity: ${now}; commits must use ${address} (run this script without --check, or \`git config user.email ${address}\`).`;
+  git(repoDir, ["config", "user.name", name]);
+  git(repoDir, ["config", "user.email", address]);
+  // What git will really use: GIT_AUTHOR_EMAIL / GIT_COMMITTER_EMAIL override the config.
+  const ident = (v) => (/<([^>]*)>/.exec(git(repoDir, ["var", v])) ?? [])[1] ?? "";
+  return NOREPLY.test(ident("GIT_AUTHOR_IDENT")) && NOREPLY.test(ident("GIT_COMMITTER_IDENT"))
+    ? `git identity: ${now}; set this repo's user.name and user.email to ${name} <${address}>, so authors and committers of commits, merges and rebases pass the repo checks.`
+    : `git identity: ${now}, and setting ${address} FAILED: set it by hand before committing.`;
+}
+
 export function checkTools(stacks, probe = has) {
   const need = [...new Set([...TOOLS.all, ...stacks.flatMap((s) => TOOLS[s] ?? [])])];
   return need.filter((t) => !probe(t));
@@ -156,6 +215,8 @@ export async function main(args = process.argv.slice(2), env = process.env) {
     );
   }
   if (remote) {
+    const id = gitIdentity(repo, { fix: !check });
+    if (id) out.push(id);
     out.push(
       "CI checks that need the GitHub API (zizmor online audits) or extra linters (actionlint) may not run here: leave them to CI and say so.",
     );

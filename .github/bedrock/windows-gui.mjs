@@ -16,6 +16,15 @@
 //   call creation_flags(, or carry "bedrock: console ok: <reason>" on the line of the call or
 //   the line above. Lesson dooperdrew/bedrock#188 (knurl-probe-app ran `cmd /C ver`;
 //   dooperdrew/knurl#84 H1).
+// --startup-errors  step "GUI binaries log startup errors" (rule rust-gui-startup-errors-logged).
+//   An Err returned from main is printed to stderr, which a GUI release build discards: the app
+//   does not start and leaves no trace, a blind spot the panic hook does not cover. In each .rs
+//   file of the crate, `fn main()` must not return a Result (`-> Result<…>`, `-> anyhow::Result`,
+//   `-> eframe::Result`…), in the files that carry the attribute (the GUI binary's root; a
+//   src/bin/*.rs without it is a separate console binary): it handles the error itself, writing it to the same log or report as
+//   panics, and returns () or an ExitCode. Otherwise "bedrock: startup errors ok: <reason>" on
+//   the line of `fn main` or the line above (attribute lines between them are skipped). Early exits with only eprintln! are for review.
+//   Lesson dooperdrew/bedrock#231 (dooperdrew/keyfold#95 K6).
 //
 // They live in repo checks, not bedrock-rust-ci.yml: plain Node runs in every repo, and a rust repo
 // with its own Rust CI never calls bedrock-rust-ci.yml (lesson dooperdrew/bedrock#193). A repo
@@ -34,9 +43,17 @@ const HOOK_WAIVER = /bedrock:\s*panic hook ok:\s*[^\s<]/;
 const COMMAND = /(?<![\w$])Command\s*::\s*new\s*\(/g;
 const FLAGS = /\.\s*creation_flags\s*\(/;
 const CONSOLE_WAIVER = /bedrock:\s*console ok:\s*[^\s<]/;
+// `fn main()` returning a type whose last path segment ends in Result (generics allowed).
+const MAIN_RESULT = /(?<![\w$])fn\s+main\s*\(\s*\)\s*->\s*([^{;]*?)\s*(?:where\b[^{]*)?\{/g;
+const STARTUP_WAIVER = /bedrock:\s*startup errors ok:\s*[^\s<]/;
 
-/** The text with Rust comments replaced by spaces (newlines kept). Strings stay. */
-export function withoutRustComments(text) {
+/**
+ * The text with Rust comments replaced by spaces (newlines kept). Strings and char literals stay,
+ * or with blankStrings are replaced by spaces too (newlines kept), tokenized like comments so a
+ * '"' or a raw string never shifts what follows.
+ */
+export function withoutRustComments(text, { blankStrings = false } = {}) {
+  const keep = (t) => (blankStrings ? t.replace(/[^\n]/g, " ") : t);
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -48,7 +65,7 @@ export function withoutRustComments(text) {
       // Raw string r"…", r#"…"#: ends at the quote followed by the same number of #.
       const close = text.indexOf(`"${raw[1]}`, i + raw[0].length);
       const stop = close === -1 ? text.length : close + 1 + raw[1].length;
-      out += text.slice(i, stop);
+      out += keep(text.slice(i, stop));
       i = stop;
     } else if (
       c === "'" &&
@@ -56,7 +73,7 @@ export function withoutRustComments(text) {
     ) {
       // A char literal ('"', '\''), not a lifetime.
       const stop = text[i + 2] === "'" && next !== "\\" ? i + 3 : text.indexOf("'", i + 3) + 1;
-      out += text.slice(i, stop);
+      out += keep(text.slice(i, stop));
       i = stop;
     } else if (c === '"') {
       let j = i + 1;
@@ -64,7 +81,7 @@ export function withoutRustComments(text) {
         if (text[j] === "\\") j++;
         j++;
       }
-      out += text.slice(i, j + 1);
+      out += keep(text.slice(i, j + 1));
       i = j + 1;
     } else if (c === "/" && next === "/") {
       const end = text.indexOf("\n", i);
@@ -173,10 +190,41 @@ export function consoleCommands(tracked, read) {
   return problems;
 }
 
+/** `fn main` returning a Result in GUI crates: [{ file, line, type }]. */
+export function resultMains(tracked, read) {
+  const problems = [];
+  for (const [, list] of guiCrates(tracked, read)) {
+    for (const f of list) {
+      const text = read(f);
+      // Only the crate roots that carry the attribute: each src/bin/*.rs is its own binary and
+      // does not inherit it, so a console tool shipped next to the GUI is not checked.
+      if (!isGui(text)) continue;
+      // Comments and string contents blanked (lengths and newlines kept).
+      const code = withoutRustComments(text, { blankStrings: true });
+      const raw = text.split(/\r?\n/);
+      for (const m of code.matchAll(MAIN_RESULT)) {
+        const type = m[1].replace(/\s+/g, " ").trim();
+        // The outer type: what comes before its first "<", last path segment.
+        const outer = type.split("<")[0].split("::").pop().trim();
+        if (!/Result$/.test(outer)) continue;
+        const line = code.slice(0, m.index).split("\n").length;
+        // The waiver: on the line of fn main or above it, skipping one-line attributes
+        // (#[tokio::main]); above an attribute spread over lines, put it on the fn main line.
+        let above = line - 2;
+        while (above >= 0 && /^\s*#\[.*\]\s*$/.test(raw[above])) above--;
+        if (STARTUP_WAIVER.test(raw[line - 1] ?? "") || STARTUP_WAIVER.test(raw[above] ?? ""))
+          continue;
+        problems.push({ file: f, line, type });
+      }
+    }
+  }
+  return problems;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const mode = process.argv[2];
-  if (mode !== "--panic-hook" && mode !== "--console") {
-    console.log("usage: windows-gui.mjs --panic-hook | --console");
+  if (mode !== "--panic-hook" && mode !== "--console" && mode !== "--startup-errors") {
+    console.log("usage: windows-gui.mjs --panic-hook | --console | --startup-errors");
     process.exit(2);
   }
   let tracked = [];
@@ -205,6 +253,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         `::error file=${p.file}::crate ${p.crate} builds a Windows GUI binary but installs no panic hook: with no console a panic leaves no trace. Call std::panic::set_hook (log, message box or report) or the reporter's install_panic_hook, or add the comment "bedrock: panic hook ok:" followed by the reason`,
       );
     if (problems.length === 0) console.log(`Every GUI crate (${gui}) installs a panic hook.`);
+    process.exit(problems.length ? 1 : 0);
+  }
+  if (mode === "--startup-errors") {
+    const problems = resultMains(tracked, read);
+    for (const p of problems)
+      console.log(
+        `::error file=${p.file},line=${p.line}::fn main returns ${p.type} in a Windows GUI crate: an Err is printed to stderr, which a release build without a console discards, so the app does not start and leaves no trace. Handle the error in main (write it to the crash log or report, as the panic hook does, then return () or an ExitCode), or add the comment "bedrock: startup errors ok:" followed by the reason on the line of fn main or the line above`,
+      );
+    if (problems.length === 0) console.log(`No main of the GUI crates (${gui}) returns a Result.`);
     process.exit(problems.length ? 1 : 0);
   }
   const problems = consoleCommands(tracked, read);

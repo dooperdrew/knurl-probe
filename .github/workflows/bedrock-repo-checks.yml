@@ -219,6 +219,16 @@ jobs:
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/startup-approved.mjs"
 
+      # A tray icon added once is lost when NIM_ADD fails at logon or Explorer restarts (lesson #230).
+      - name: tray icons come back on TaskbarCreated
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/tray-taskbar.mjs"
+
+      # An Err returned from main goes to stderr, which a GUI release build discards (lesson #231).
+      - name: GUI binaries log startup errors
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/windows-gui.mjs" --startup-errors
+
       # Claude Code's telemetry carries the account email; raw captures kept as fixtures keep it
       # in git (lesson #215).
       - name: fixtures hold no personal identity
@@ -229,6 +239,11 @@ jobs:
       - name: conditional gh api reads use --include
         shell: bash
         run: node "$GITHUB_WORKSPACE/.github/bedrock/gh-conditional.mjs"
+
+      # overflow-wrap: anywhere on html, body or * breaks words in narrow columns (lesson #224).
+      - name: no global overflow-wrap anywhere
+        shell: bash
+        run: node "$GITHUB_WORKSPACE/.github/bedrock/overflow-wrap.mjs"
 
       - name: managed files are committed, not ignored
         shell: bash

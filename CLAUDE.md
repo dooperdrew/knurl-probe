@@ -23,7 +23,7 @@ Strumento a riga di comando per Windows che trova le cuffie Sony accoppiate e re
 - Un'unione su `main` si fa con il push in fast-forward dello SHA su cui sono girati i controlli verdi.
 
 <!-- bedrock:begin: managed by bedrock sync, do not edit by hand -->
-## bedrock rules (kit 0.39.0, stacks: rust)
+## bedrock rules (kit 0.43.0, stacks: rust)
 
 Shared by every DooperDrew project. Each rule names its check; a `review` rule is checked in review until it gets a CI check.
 
@@ -58,7 +58,7 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **postgres-text-compare-utc**: Comparing PostgreSQL data as text across servers (backups, fingerprints) fixes both sessions: PGTZ=UTC, PGDATESTYLE=ISO. _(review until 2027-02-10)_
 - **rate-limit-counts-valid-only**: A rate limiter on a quota-bound store (KV…) counts only accepted requests and handles store errors explicitly. _(review until 2027-02-22)_
 - **readme-bilingual**: With docs modules set, README.md and README.it.md link each other and match section by section; badges are only real (CI, release, license). _(CI: README in English and Italian)_
-- **repo-commit-identity**: Authors use the GitHub noreply address; a green PR merges only by Rebase and merge or a fast-forward push of its checked SHA to main. _(CI: commit authors use the noreply identity)_
+- **repo-commit-identity**: Authors and committers use the GitHub noreply address (the cloud hook sets it); a green PR merges only by Rebase and merge or a fast-forward push of its checked SHA to main. _(CI: commit authors use the noreply identity)_
 - **repo-kit-parts-kept**: A merge touching .bedrock.yml keeps both sides' keys (stacks, design, docs, parts); a part's files stay only while it is on. _(CI: optional kit parts match .bedrock.yml)_
 - **repo-managed-files-committed**: Every managed path of .bedrock.yml is committed, not git-ignored (ignoring .claude/* needs ! exceptions for them). _(CI: managed files are committed, not ignored)_
 - **repo-managed-files-via-sync**: Managed files and the bedrock: version change only in the bedrock/sync PR; feature PRs never run bedrock sync (they may stack on it, saying so). _(CI: managed files change only in the bedrock sync PR)_
@@ -77,6 +77,7 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **rust-fmt**: Code is formatted with rustfmt; CI fails on any diff. _(CI: cargo fmt)_
 - **rust-gui-no-console-window**: A Windows GUI crate starts child processes with CREATE_NO_WINDOW and reads system facts from APIs, not localized command output. _(CI: GUI binaries start children without a console)_
 - **rust-gui-panic-hook**: A Rust binary with windows_subsystem = "windows" installs a panic hook that leaves a trace the user or the relay can see. _(CI: GUI binaries install a panic hook)_
+- **rust-gui-startup-errors-logged**: A Windows GUI binary's main never returns a Result: fatal startup errors go to the same log or report as panics, since stderr is discarded. _(CI: GUI binaries log startup errors)_
 - **rust-lockfile-committed**: Cargo.lock is committed so builds and releases are reproducible. _(CI: Cargo.lock is committed)_
 - **rust-tests-pass**: The whole workspace test suite passes against the committed lockfile. _(CI: cargo test)_
 - **rust-unsafe-documented**: Every unsafe block has a "// SAFETY:" comment explaining why it is sound. _(CI: cargo clippy)_
@@ -84,10 +85,12 @@ Shared by every DooperDrew project. Each rule names its check; a `review` rule i
 - **scripts-flags-need-values**: A writing script fails when a flag's value is missing or is another flag, never widening to the default scope. _(review until 2027-02-22)_
 - **shared-append-exclusive-lock**: Concurrent appends to one file use FileShare.None or a mutex (other shares lock nothing on Linux); writers and readers retry. _(CI: appends take an exclusive lock)_
 - **telemetry-fields-allowlisted**: Telemetry and log receivers store an allowlist of fields (Claude Code's OTLP carries user.email); fixtures hold no real identity. _(CI: fixtures hold no personal identity)_
+- **tests-read-clock-once**: A test using the current date reads the clock once and passes it to the code under test (no midnight flakes). _(review until 2027-02-25)_
 - **web-origin-check-keeps-referrer**: A server checking Origin against Host on writes never sends Referrer-Policy no-referrer (forms then send Origin: null); it sends same-origin, tested. _(CI: no-referrer does not break Origin checks)_
 - **windows-autostart-startup-approved**: Start with Windows via the Run key also reads Explorer\StartupApproved\Run (odd first byte = off) and clears it when turned on. _(CI: Start with Windows reads StartupApproved)_
 - **windows-registry-create-or-open**: Windows registry writes create-or-open the key (RegCreateKeyExW, create()); removals treat a missing key or value as already removed. _(review until 2027-02-07)_
 - **windows-tar-relative-paths**: On Windows runners tar gets relative archive names, --force-local or System32 tar: GNU tar reads C:\x as host:path. _(review until 2027-02-23)_
+- **windows-tray-taskbar-created**: A Windows tray app re-adds its icon on TaskbarCreated (NIM_ADD fails before Explorer is ready); a refused GUID removes the stale icon, then retries. _(CI: tray icons come back on TaskbarCreated)_
 - **work-cloud-first**: Work needing no PC hardware, Windows-only build, PC-only file or host the cloud proxy refuses runs in a cloud session, handed off by local ones. _(review until 2027-02-15)_
 - **work-is-pushed**: Work happens on a claude/<topic> branch; each verified step is committed and pushed; changes reach main only through a PR. _(review until 2027-02-04)_
 - **workflow-scripts-in-files**: A workflow run: block holds only short shell; an interpreter script over 30 lines lives in its own file, called by the step. _(CI: workflow run blocks keep long scripts in files)_
