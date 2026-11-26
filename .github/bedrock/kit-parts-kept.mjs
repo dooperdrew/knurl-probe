@@ -26,6 +26,7 @@ export const PARTS = {
     ".claude/bedrock/autopilot/agents/verifier.md",
     ".claude/bedrock/autopilot/agents/notifier.md",
     ".claude/bedrock/autopilot/agents/optimizer.md",
+    ".claude/bedrock/autopilot/agents/planner.md",
     ".claude/bedrock/autopilot/config.json",
   ],
   reports: [
