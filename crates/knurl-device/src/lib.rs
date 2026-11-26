@@ -12,6 +12,7 @@
 
 #[cfg(windows)]
 pub mod bluetooth;
+mod choice;
 mod event;
 mod reason;
 #[cfg(windows)]
@@ -19,6 +20,7 @@ pub mod winsock;
 #[cfg(windows)]
 mod worker;
 
+pub use choice::{Choice, FALLBACK_EVERY, choose};
 pub use event::DeviceEvent;
 pub use reason::{AckWatch, DisconnectReason, MAX_UNACKED, SLEEP_GAP, WakeWatch};
 #[cfg(windows)]

@@ -15,15 +15,22 @@ use knurl_protocol::session::Config;
 
 use crate::bluetooth::{self, MDR_V1, Paired};
 use crate::winsock::{RfcommSocket, WsaError, connect_rfcomm};
-use crate::{AckWatch, DeviceEvent, DisconnectReason, WakeWatch};
+use crate::{AckWatch, Choice, DeviceEvent, DisconnectReason, WakeWatch, choose};
 
 /// Wait before searching or connecting again after a failure.
 const RETRY_DELAY: Duration = Duration::from_secs(10);
 /// Wait before connecting again after the PC woke from sleep: long enough
 /// for Bluetooth to come back, short enough not to show old data for long.
 const RESUME_DELAY: Duration = Duration::from_secs(3);
-/// How often the client is polled when no data arrives.
+/// How often the client is polled when no data arrives while a request is
+/// out (its timeouts and resends need it).
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// The same when nothing is out: fewer wake-ups at rest (audit of Knurl
+/// 2026-11-26); a command from the UI then waits at most this long.
+const IDLE_POLL: Duration = Duration::from_millis(250);
+/// How often the loop looks again whether Windows sees the headphones
+/// connected, while it waits for them.
+const WATCH_DELAY: Duration = Duration::from_secs(3);
 
 /// Handle to the background thread. Dropping it stops the thread.
 pub struct Worker {
@@ -170,11 +177,16 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
     // With more than one supported pair paired (an XM3 and an XM4), each try
     // takes the next one, so a pair that is off does not hide the other.
     let mut turn: usize = 0;
+    let mut last_fallback: Option<Instant> = None;
+    // The pair last reported as waiting, so the UI hears it once, not every
+    // few seconds.
+    let mut waiting: Option<String> = None;
     while !stop.load(Ordering::Relaxed) {
         drop_commands(commands, tx);
         let headphones = match bluetooth::paired_supported_headphones() {
             Ok(list) => list,
             Err(e) => {
+                waiting = None;
                 let _ = tx.send(DeviceEvent::BluetoothError(e.to_string()));
                 if !wait(stop, RETRY_DELAY) {
                     return;
@@ -182,14 +194,39 @@ fn run(tx: &Sender<DeviceEvent>, commands: &Receiver<Request>, stop: &AtomicBool
                 continue;
             }
         };
-        let count = headphones.len();
-        let Some(target) = headphones.into_iter().nth(pick(turn, count)) else {
-            let _ = tx.send(DeviceEvent::NoHeadphones);
-            if !wait(stop, RETRY_DELAY) {
-                return;
+        let connected: Vec<Option<bool>> = headphones.iter().map(|h| h.connected).collect();
+        let index = match choose(&connected, turn, last_fallback.map(|t| t.elapsed())) {
+            Choice::NonePaired => {
+                waiting = None;
+                let _ = tx.send(DeviceEvent::NoHeadphones);
+                if !wait(stop, RETRY_DELAY) {
+                    return;
+                }
+                continue;
             }
+            Choice::Wait(i) => {
+                let name = headphones[i].name.clone();
+                if waiting.as_ref() != Some(&name) {
+                    let _ = tx.send(DeviceEvent::Disconnected {
+                        name: name.clone(),
+                        reason: DisconnectReason::NotConnected,
+                    });
+                    waiting = Some(name);
+                }
+                if !wait(stop, WATCH_DELAY) {
+                    return;
+                }
+                continue;
+            }
+            Choice::Try(i) => i,
+        };
+        let Some(target) = headphones.into_iter().nth(index) else {
             continue;
         };
+        if target.connected == Some(false) {
+            last_fallback = Some(Instant::now());
+        }
+        waiting = None;
         turn = turn.wrapping_add(1);
         let reason = session(&target, tx, commands, stop);
         let delay = retry_delay(&reason);
@@ -210,11 +247,6 @@ fn retry_delay(reason: &DisconnectReason) -> Duration {
     } else {
         RETRY_DELAY
     }
-}
-
-/// Which of `count` paired headphones the try number `turn` uses.
-fn pick(turn: usize, count: usize) -> usize {
-    if count == 0 { 0 } else { turn % count }
 }
 
 /// Something that can be shut down to unblock a reader on another thread.
@@ -287,7 +319,12 @@ fn session(
             reason = Some(DisconnectReason::Resumed);
             break;
         }
-        let events = match bytes_rx.recv_timeout(POLL_INTERVAL) {
+        let poll = if client.is_idle() {
+            IDLE_POLL
+        } else {
+            POLL_INTERVAL
+        };
+        let events = match bytes_rx.recv_timeout(poll) {
             Ok(Incoming::Bytes(b)) => {
                 acks.received();
                 let events = client.receive(&b, now());
@@ -505,12 +542,5 @@ mod tests {
     fn after_a_sleep_the_next_try_comes_sooner() {
         assert_eq!(retry_delay(&DisconnectReason::Resumed), RESUME_DELAY);
         assert_eq!(retry_delay(&DisconnectReason::NotAnswering), RETRY_DELAY);
-    }
-
-    #[test]
-    fn tries_take_each_paired_headphones_in_turn() {
-        assert_eq!((0..4).map(|t| pick(t, 2)).collect::<Vec<_>>(), [0, 1, 0, 1]);
-        assert_eq!(pick(5, 1), 0);
-        assert_eq!(pick(3, 0), 0);
     }
 }

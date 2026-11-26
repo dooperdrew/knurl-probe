@@ -29,6 +29,14 @@ pub enum DisconnectReason {
     Unreachable { detail: String },
     /// An open connection broke: out of range, turned off, link reset.
     Lost { detail: String },
+    /// Windows does not see the headphones connected to this PC (off, out
+    /// of range or with another device), so Knurl does not try: a try would
+    /// page them over the radio every few seconds (audit of Knurl
+    /// 2026-11-26, point 1). It connects once Windows sees them.
+    NotConnected,
+    /// Another program holds the headphones' control channel (WSA 10048),
+    /// for example an old XMCompanion still running.
+    InUse { detail: String },
     /// The headphones closed the connection themselves.
     ClosedByHeadphones,
     /// The headphones stopped answering: [`MAX_UNACKED`] requests in a row
@@ -51,8 +59,10 @@ impl DisconnectReason {
         // Winsock codes (winerror.h): 10050 network down, 10051 network
         // unreachable, 10052 dropped on reset, 10053 aborted, 10054 reset by
         // peer, 10060 timed out, 10061 refused, 10064 host down, 10065 host
-        // unreachable.
+        // unreachable, 10048 address in use (another program holds the
+        // channel).
         match code {
+            10048 => DisconnectReason::InUse { detail },
             10050 | 10051 | 10060 | 10061 | 10064 | 10065 if connecting => {
                 DisconnectReason::Unreachable { detail }
             }
@@ -68,8 +78,10 @@ impl DisconnectReason {
         match self {
             DisconnectReason::Unreachable { detail }
             | DisconnectReason::Lost { detail }
+            | DisconnectReason::InUse { detail }
             | DisconnectReason::Failed { detail } => detail,
-            DisconnectReason::ClosedByHeadphones
+            DisconnectReason::NotConnected
+            | DisconnectReason::ClosedByHeadphones
             | DisconnectReason::NotAnswering
             | DisconnectReason::Resumed
             | DisconnectReason::Stopped => "",
@@ -83,6 +95,8 @@ impl std::fmt::Display for DisconnectReason {
         let kind = match self {
             DisconnectReason::Unreachable { .. } => "unreachable",
             DisconnectReason::Lost { .. } => "connection lost",
+            DisconnectReason::NotConnected => "not connected to this PC",
+            DisconnectReason::InUse { .. } => "another program holds the control channel",
             DisconnectReason::ClosedByHeadphones => "closed by the headphones",
             DisconnectReason::NotAnswering => "the headphones stopped answering",
             DisconnectReason::Resumed => "the PC woke from sleep",
@@ -219,6 +233,19 @@ mod tests {
         assert!(!watch.woke(t0 + Duration::from_secs(37)));
         // A clock set back is not a sleep.
         assert!(!watch.woke(t0));
+    }
+
+    #[test]
+    fn a_held_channel_has_its_own_kind() {
+        for connecting in [true, false] {
+            let r = DisconnectReason::from_wsa(connecting, "connect", 10048);
+            assert!(matches!(r, DisconnectReason::InUse { .. }), "{r:?}");
+            assert_eq!(r.detail(), "connect failed: WSA error 10048");
+        }
+        assert_eq!(
+            DisconnectReason::NotConnected.to_string(),
+            "not connected to this PC"
+        );
     }
 
     #[test]

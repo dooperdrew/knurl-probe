@@ -1,7 +1,7 @@
 //! Paired Bluetooth Classic devices, through WinRT (enumeration works; only
 //! the RFCOMM service lookup is unreliable, see the crate docs).
 
-use windows::Devices::Bluetooth::BluetoothDevice;
+use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice};
 use windows::Devices::Enumeration::DeviceInformation;
 use windows::core::GUID;
 
@@ -29,6 +29,9 @@ pub fn paired_classic_devices() -> windows::core::Result<Vec<BluetoothDevice>> {
 pub struct Paired {
     pub name: String,
     pub address: u64,
+    /// Whether Windows sees it connected to this PC (`ConnectionStatus`);
+    /// `None` when the status could not be read.
+    pub connected: Option<bool>,
 }
 
 /// Paired headphones of a supported model (WH-1000XM3 or WH-1000XM4). A
@@ -37,17 +40,27 @@ pub struct Paired {
 pub fn paired_supported_headphones() -> windows::core::Result<Vec<Paired>> {
     Ok(supported(paired_classic_devices()?.iter().map(|device| {
         let name = device.Name()?.to_string_lossy();
-        Ok::<_, windows::core::Error>((name, device.BluetoothAddress()?))
+        let connected = device
+            .ConnectionStatus()
+            .ok()
+            .map(|s| s == BluetoothConnectionStatus::Connected);
+        Ok::<_, windows::core::Error>((name, device.BluetoothAddress()?, connected))
     })))
 }
 
 /// The supported headphones among `devices` (name and address each, or the
 /// error reading them), skipping the ones that could not be read.
-fn supported<E>(devices: impl Iterator<Item = Result<(String, u64), E>>) -> Vec<Paired> {
+fn supported<E>(
+    devices: impl Iterator<Item = Result<(String, u64, Option<bool>), E>>,
+) -> Vec<Paired> {
     devices
         .filter_map(Result::ok)
-        .filter(|(name, _)| knurl_protocol::client::is_supported_model(name))
-        .map(|(name, address)| Paired { name, address })
+        .filter(|(name, _, _)| knurl_protocol::client::is_supported_model(name))
+        .map(|(name, address, connected)| Paired {
+            name,
+            address,
+            connected,
+        })
         .collect()
 }
 
@@ -68,14 +81,15 @@ mod tests {
     fn a_device_that_cannot_be_read_does_not_hide_the_others() {
         let devices = vec![
             Err("faulty pairing"),
-            Ok(("Keyboard".to_string(), 1)),
-            Ok(("WH-1000XM3".to_string(), 2)),
+            Ok(("Keyboard".to_string(), 1, Some(true))),
+            Ok(("WH-1000XM3".to_string(), 2, Some(false))),
         ];
         assert_eq!(
             supported(devices.into_iter()),
             vec![Paired {
                 name: "WH-1000XM3".into(),
-                address: 2
+                address: 2,
+                connected: Some(false),
             }]
         );
     }
